@@ -1,0 +1,13 @@
+{
+  "id": "sbs-start-issue-selection",
+  "started": "2025-07-30T19:24:00Z",
+  "lastUpdated": "2025-07-30T19:24:00Z",
+  "status": "active",
+  "phase": "discovery",
+  "progress": {
+    "discovery": { "answered": 0, "total": 10 },
+    "detail": { "answered": 0, "total": 0 }
+  },
+  "contextFiles": [],
+  "relatedFeatures": []
+}
