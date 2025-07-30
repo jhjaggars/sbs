@@ -8,7 +8,7 @@ import (
 	"work-orchestrator/pkg/config"
 	"work-orchestrator/pkg/git"
 	"work-orchestrator/pkg/issue"
-	"work-orchestrator/pkg/sandbox"
+	"work-orchestrator/pkg/repo"
 	"work-orchestrator/pkg/tmux"
 )
 
@@ -39,8 +39,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 	
 	resume, _ := cmd.Flags().GetBool("resume")
 	
+	// Initialize repository context
+	repoManager := repo.NewManager()
+	currentRepo, err := repoManager.DetectCurrentRepository()
+	if err != nil {
+		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+	
 	// Initialize managers
-	gitManager, err := git.NewManager(cfg.RepoPath)
+	gitManager, err := git.NewManager(currentRepo.Root)
 	if err != nil {
 		return fmt.Errorf("failed to initialize git manager: %w", err)
 	}
@@ -48,8 +55,9 @@ func runStart(cmd *cobra.Command, args []string) error {
 	tmuxManager := tmux.NewManager()
 	issueTracker := issue.NewTracker(cfg)
 	
-	// Load existing sessions
-	sessions, err := config.LoadSessions()
+	// Load repository-specific sessions
+	sessionsPath := currentRepo.GetSessionsPath()
+	sessions, err := config.LoadSessionsFromPath(sessionsPath)
 	if err != nil {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
@@ -93,27 +101,27 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Using branch: %s\n", branch)
 	
-	// Create worktree
-	worktreePath := issueTracker.GetWorktreePath(issueNumber)
+	// Create worktree using repository-aware path
+	worktreePath := currentRepo.GetWorktreePath(issueNumber)
 	if err := gitManager.CreateWorktree(branch, worktreePath); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 	fmt.Printf("Worktree created at: %s\n", worktreePath)
 	
-	// Create tmux session
-	session, err := tmuxManager.CreateSession(issueNumber, worktreePath)
+	// Create tmux session with repository-scoped name
+	tmuxSessionName := currentRepo.GetTmuxSessionName(issueNumber)
+	session, err := tmuxManager.CreateSession(issueNumber, worktreePath, tmuxSessionName)
 	if err != nil {
 		return fmt.Errorf("failed to create tmux session: %w", err)
 	}
 	fmt.Printf("Tmux session created: %s\n", session.Name)
 	
-	// Get sandbox name
-	sandboxManager := sandbox.NewManager()
-	sandboxName := sandboxManager.GetSandboxName(issueNumber)
+	// Get repository-scoped sandbox name
+	sandboxName := currentRepo.GetSandboxName(issueNumber)
 	
 	// Create or update session metadata
 	sessionMetadata := issueTracker.CreateSessionMetadata(
-		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName)
+		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName, currentRepo.Name, currentRepo.Root)
 	
 	// Update sessions list
 	if existingSession != nil {
@@ -129,8 +137,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		sessions = append(sessions, *sessionMetadata)
 	}
 	
-	// Save updated sessions
-	if err := config.SaveSessions(sessions); err != nil {
+	// Save updated sessions to repository-specific location
+	if err := config.SaveSessionsToPath(sessions, sessionsPath); err != nil {
 		return fmt.Errorf("failed to save sessions: %w", err)
 	}
 	

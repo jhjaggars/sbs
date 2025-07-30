@@ -10,16 +10,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	
 	"work-orchestrator/pkg/config"
+	"work-orchestrator/pkg/repo"
 	"work-orchestrator/pkg/tmux"
 )
 
 type keyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Enter  key.Binding
-	Quit   key.Binding
-	Help   key.Binding
-	Refresh key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	Enter     key.Binding
+	Quit      key.Binding
+	Help      key.Binding
+	Refresh   key.Binding
+	ToggleView key.Binding
 }
 
 var keys = keyMap{
@@ -47,25 +49,51 @@ var keys = keyMap{
 		key.WithKeys("r"),
 		key.WithHelp("r", "refresh"),
 	),
+	ToggleView: key.NewBinding(
+		key.WithKeys("g"),
+		key.WithHelp("g", "toggle global/repo view"),
+	),
 }
+
+type ViewMode int
+
+const (
+	ViewModeRepository ViewMode = iota // Show only current repo sessions
+	ViewModeGlobal                     // Show all sessions across repos
+)
 
 type Model struct {
 	sessions     []config.SessionMetadata
 	tmuxSessions []*tmux.Session
 	cursor       int
 	showHelp     bool
+	viewMode     ViewMode
+	currentRepo  *repo.Repository
 	tmuxManager  *tmux.Manager
+	repoManager  *repo.Manager
 	width        int
 	height       int
 	error        error
 }
 
 func NewModel() Model {
+	repoManager := repo.NewManager()
+	currentRepo, _ := repoManager.DetectCurrentRepository()
+	
+	// Default to repository view if in a repo, global otherwise
+	viewMode := ViewModeGlobal
+	if currentRepo != nil {
+		viewMode = ViewModeRepository
+	}
+	
 	return Model{
 		sessions:    []config.SessionMetadata{},
 		cursor:      0,
 		showHelp:    false,
+		viewMode:    viewMode,
+		currentRepo: currentRepo,
 		tmuxManager: tmux.NewManager(),
+		repoManager: repoManager,
 	}
 }
 
@@ -113,6 +141,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			
 		case key.Matches(msg, keys.Refresh):
 			return m, m.refreshSessions()
+			
+		case key.Matches(msg, keys.ToggleView):
+			return m.toggleViewMode(), m.refreshSessions()
 		}
 		
 	case refreshMsg:
@@ -138,8 +169,13 @@ func (m Model) View() string {
 	
 	var b strings.Builder
 	
-	// Title
-	title := titleStyle.Render("Work Issue Orchestrator")
+	// Title with view mode indicator
+	var title string
+	if m.currentRepo != nil && m.viewMode == ViewModeRepository {
+		title = titleStyle.Render(fmt.Sprintf("Work Issue Orchestrator (%s)", m.currentRepo.Name))
+	} else {
+		title = titleStyle.Render("Work Issue Orchestrator (Global)")
+	}
 	b.WriteString(title + "\n\n")
 	
 	// Sessions list
@@ -147,9 +183,15 @@ func (m Model) View() string {
 		b.WriteString(mutedStyle.Render("No active work sessions found.") + "\n")
 		b.WriteString(mutedStyle.Render("Use 'work-orchestrator start <issue-number>' to create a new session.") + "\n")
 	} else {
-		// Table header
-		headerRow := fmt.Sprintf("%-6s %-50s %-20s %-10s %-15s",
-			"Issue", "Title", "Branch", "Status", "Last Activity")
+		// Table header - include repository column in global view
+		var headerRow string
+		if m.viewMode == ViewModeGlobal {
+			headerRow = fmt.Sprintf("%-6s %-35s %-15s %-15s %-10s %-15s",
+				"Issue", "Title", "Repository", "Branch", "Status", "Last Activity")
+		} else {
+			headerRow = fmt.Sprintf("%-6s %-50s %-20s %-10s %-15s",
+				"Issue", "Title", "Branch", "Status", "Last Activity")
+		}
 		b.WriteString(tableHeaderStyle.Render(headerRow) + "\n")
 		
 		// Sessions
@@ -157,18 +199,35 @@ func (m Model) View() string {
 			// Determine actual status by checking tmux
 			status := m.getSessionStatus(session.TmuxSession)
 			
-			// Format row
-			title := TruncateString(session.IssueTitle, 48)
-			branch := TruncateString(session.Branch, 18)
+			// Format row based on view mode
+			var row string
 			lastActivity := m.formatTimeAgo(session.LastActivity)
 			
-			row := fmt.Sprintf("%-6d %-50s %-20s %-10s %-15s",
-				session.IssueNumber,
-				title,
-				branch,
-				FormatStatus(status),
-				lastActivity,
-			)
+			if m.viewMode == ViewModeGlobal {
+				title := TruncateString(session.IssueTitle, 33)
+				repo := TruncateString(session.RepositoryName, 13)
+				branch := TruncateString(session.Branch, 13)
+				
+				row = fmt.Sprintf("%-6d %-35s %-15s %-15s %-10s %-15s",
+					session.IssueNumber,
+					title,
+					repo,
+					branch,
+					FormatStatus(status),
+					lastActivity,
+				)
+			} else {
+				title := TruncateString(session.IssueTitle, 48)
+				branch := TruncateString(session.Branch, 18)
+				
+				row = fmt.Sprintf("%-6d %-50s %-20s %-10s %-15s",
+					session.IssueNumber,
+					title,
+					branch,
+					FormatStatus(status),
+					lastActivity,
+				)
+			}
 			
 			// Apply selection style
 			if i == m.cursor {
@@ -185,7 +244,11 @@ func (m Model) View() string {
 	if m.showHelp {
 		b.WriteString("\n" + m.helpView())
 	} else {
-		b.WriteString(helpStyle.Render("\nPress ? for help, r to refresh, q to quit"))
+		helpText := "\nPress ? for help, g to toggle view, r to refresh, q to quit"
+		if m.currentRepo == nil && m.viewMode == ViewModeRepository {
+			helpText = "\nNot in git repository - showing global view. Press ? for help, r to refresh, q to quit"
+		}
+		b.WriteString(helpStyle.Render(helpText))
 	}
 	
 	return lipgloss.NewStyle().
@@ -200,6 +263,7 @@ func (m Model) helpView() string {
 	help.WriteString("↑/k    - Move up\n")
 	help.WriteString("↓/j    - Move down\n")
 	help.WriteString("enter  - Attach to selected session\n")
+	help.WriteString("g      - Toggle global/repository view\n")
 	help.WriteString("r      - Refresh session list\n")
 	help.WriteString("?      - Toggle this help\n")
 	help.WriteString("q      - Quit\n")
@@ -242,11 +306,43 @@ type attachMsg struct {
 	err error
 }
 
+// toggleViewMode switches between repository and global view modes
+func (m Model) toggleViewMode() Model {
+	if m.currentRepo == nil {
+		// Can't toggle to repository view if not in a repository
+		return m
+	}
+	
+	if m.viewMode == ViewModeRepository {
+		m.viewMode = ViewModeGlobal
+	} else {
+		m.viewMode = ViewModeRepository
+	}
+	
+	// Reset cursor when switching views
+	m.cursor = 0
+	
+	return m
+}
+
 func (m Model) refreshSessions() tea.Cmd {
 	return func() tea.Msg {
-		sessions, err := config.LoadSessions()
-		if err != nil {
-			return refreshMsg{err: err}
+		var sessions []config.SessionMetadata
+		var err error
+		
+		if m.viewMode == ViewModeRepository && m.currentRepo != nil {
+			// Load repository-specific sessions
+			sessionsPath := m.currentRepo.GetSessionsPath()
+			sessions, err = config.LoadSessionsFromPath(sessionsPath)
+			if err != nil {
+				return refreshMsg{err: err}
+			}
+		} else {
+			// Load all sessions (global view)
+			sessions, err = config.LoadAllRepositorySessions()
+			if err != nil {
+				return refreshMsg{err: err}
+			}
 		}
 		
 		tmuxSessions, err := m.tmuxManager.ListSessions()

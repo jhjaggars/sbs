@@ -12,9 +12,14 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
-// GetSandboxName returns the expected sandbox name for an issue
+// GetSandboxName returns the expected sandbox name for an issue (legacy method)
 func (m *Manager) GetSandboxName(issueNumber int) string {
 	return fmt.Sprintf("work-issue-%d", issueNumber)
+}
+
+// GetRepositorySandboxName returns the repository-scoped sandbox name
+func (m *Manager) GetRepositorySandboxName(repoName string, issueNumber int) string {
+	return fmt.Sprintf("work-issue-%s-%d", repoName, issueNumber)
 }
 
 // SandboxExists checks if a sandbox with the given name exists
