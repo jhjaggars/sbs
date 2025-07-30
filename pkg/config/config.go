@@ -44,7 +44,7 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	
-	configPath := filepath.Join(homeDir, ".config", "work-orchestrator", "config.json")
+	configPath := filepath.Join(homeDir, ".config", "sbs", "config.json")
 	
 	// Create default config if doesn't exist
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -74,7 +74,7 @@ func SaveConfig(config *Config) error {
 		return err
 	}
 	
-	configDir := filepath.Join(homeDir, ".config", "work-orchestrator")
+	configDir := filepath.Join(homeDir, ".config", "sbs")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func LoadSessions() ([]SessionMetadata, error) {
 		return nil, err
 	}
 	
-	sessionsPath := filepath.Join(homeDir, ".config", "work-orchestrator", "sessions.json")
+	sessionsPath := filepath.Join(homeDir, ".config", "sbs", "sessions.json")
 	return LoadSessionsFromPath(sessionsPath)
 }
 
@@ -140,7 +140,7 @@ func SaveSessions(sessions []SessionMetadata) error {
 		return err
 	}
 	
-	configDir := filepath.Join(homeDir, ".config", "work-orchestrator")
+	configDir := filepath.Join(homeDir, ".config", "sbs")
 	sessionsPath := filepath.Join(configDir, "sessions.json")
 	return SaveSessionsToPath(sessions, sessionsPath)
 }
@@ -205,7 +205,7 @@ func getWorkspaceSearchPaths() []string {
 	return searchPaths
 }
 
-// scanForSessionFiles recursively searches for .work-orchestrator/sessions.json files
+// scanForSessionFiles recursively searches for .sbs/sessions.json files
 func scanForSessionFiles(basePath string) ([]SessionMetadata, error) {
 	var allSessions []SessionMetadata
 	
@@ -214,19 +214,19 @@ func scanForSessionFiles(basePath string) ([]SessionMetadata, error) {
 		return allSessions, nil
 	}
 	
-	// Walk through directories looking for .work-orchestrator/sessions.json
+	// Walk through directories looking for .sbs/sessions.json
 	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Continue walking even if there are permission errors
 		}
 		
-		// Skip hidden directories (except .work-orchestrator itself)
-		if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != ".work-orchestrator" {
+		// Skip hidden directories (except .sbs itself)
+		if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != ".sbs" {
 			return filepath.SkipDir
 		}
 		
-		// Look for sessions.json files in .work-orchestrator directories
-		if info.Name() == "sessions.json" && strings.HasSuffix(filepath.Dir(path), ".work-orchestrator") {
+		// Look for sessions.json files in .sbs directories
+		if info.Name() == "sessions.json" && strings.HasSuffix(filepath.Dir(path), ".sbs") {
 			sessions, err := LoadSessionsFromPath(path)
 			if err == nil {
 				allSessions = append(allSessions, sessions...)

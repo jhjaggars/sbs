@@ -1,4 +1,4 @@
-module work-orchestrator
+module sbs
 
 go 1.24.4
 

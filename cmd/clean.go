@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"work-orchestrator/pkg/config"
-	"work-orchestrator/pkg/sandbox"
-	"work-orchestrator/pkg/tmux"
+	"sbs/pkg/config"
+	"sbs/pkg/sandbox"
+	"sbs/pkg/tmux"
 )
 
 var cleanCmd = &cobra.Command{
@@ -180,7 +180,7 @@ func saveSessionsToTheirRepositories(sessions []config.SessionMetadata) error {
 	
 	// Save repository-specific sessions
 	for repoRoot, repoSessions := range sessionsByRepo {
-		sessionsPath := filepath.Join(repoRoot, ".work-orchestrator", "sessions.json")
+		sessionsPath := filepath.Join(repoRoot, ".sbs", "sessions.json")
 		if err := config.SaveSessionsToPath(repoSessions, sessionsPath); err != nil {
 			// Don't fail completely if one repository fails
 			fmt.Printf("Warning: failed to save sessions for repository %s: %v\n", repoRoot, err)

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"work-orchestrator/pkg/config"
+	"sbs/pkg/config"
 )
 
 type Tracker struct {

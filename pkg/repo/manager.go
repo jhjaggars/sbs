@@ -46,7 +46,7 @@ func (m *Manager) DetectCurrentRepository() (*Repository, error) {
 
 // GetSessionsPath returns the path to the repository-specific sessions file
 func (r *Repository) GetSessionsPath() string {
-	return filepath.Join(r.Root, ".work-orchestrator", "sessions.json")
+	return filepath.Join(r.Root, ".sbs", "sessions.json")
 }
 
 // GetTmuxSessionName returns the repository-scoped tmux session name

@@ -9,9 +9,9 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	
-	"work-orchestrator/pkg/config"
-	"work-orchestrator/pkg/repo"
-	"work-orchestrator/pkg/tmux"
+	"sbs/pkg/config"
+	"sbs/pkg/repo"
+	"sbs/pkg/tmux"
 )
 
 type keyMap struct {

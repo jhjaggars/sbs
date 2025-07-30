@@ -5,14 +5,14 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"work-orchestrator/pkg/config"
-	"work-orchestrator/pkg/validation"
+	"sbs/pkg/config"
+	"sbs/pkg/validation"
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "work-orchestrator",
-	Short: "Orchestrate GitHub issue work environments with git worktrees and tmux sessions",
-	Long: `Work Orchestrator creates and manages isolated work environments for GitHub issues.
+	Use:   "sbs",
+	Short: "Sandbox Sessions - Manage GitHub issue work environments",
+	Long: `SBS (Sandbox Sessions) creates and manages isolated work environments for GitHub issues.
 It automatically handles:
 - Git branch creation and worktrees
 - Tmux session management
@@ -31,7 +31,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	
 	// Global flags
-	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is ~/.config/work-orchestrator/config.json)")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is ~/.config/sbs/config.json)")
 }
 
 func initConfig() {

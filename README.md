@@ -1,4 +1,4 @@
-# Work Orchestrator
+# SBS (Sandbox Sessions)
 
 A command-line tool that orchestrates GitHub issue work environments with automatic git worktree and tmux session management.
 
@@ -13,14 +13,14 @@ A command-line tool that orchestrates GitHub issue work environments with automa
 ## Installation
 
 ```bash
-go build -o work-orchestrator
+go build -o sbs
 ```
 
 ## Usage
 
 ### Start a new work session
 ```bash
-./work-orchestrator start 123
+./sbs start 123
 ```
 
 This will:
@@ -31,29 +31,29 @@ This will:
 
 ### List active sessions
 ```bash
-./work-orchestrator list          # Interactive TUI
-./work-orchestrator list --plain  # Plain text output
+./sbs list          # Interactive TUI
+./sbs list --plain  # Plain text output
 ```
 
 ### Attach to an existing session
 ```bash
-./work-orchestrator attach 123
+./sbs attach 123
 ```
 
 ### Stop a session
 ```bash
-./work-orchestrator stop 123
+./sbs stop 123
 ```
 
 ### Clean up stale sessions
 ```bash
-./work-orchestrator clean
-./work-orchestrator clean --dry-run  # Preview changes
+./sbs clean
+./sbs clean --dry-run  # Preview changes
 ```
 
 ## Configuration
 
-Configuration is stored in `~/.config/work-orchestrator/config.json`:
+Configuration is stored in `~/.config/sbs/config.json`:
 
 ```json
 {

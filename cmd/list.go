@@ -5,8 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"work-orchestrator/pkg/config"
-	"work-orchestrator/pkg/tui"
+	"sbs/pkg/config"
+	"sbs/pkg/tui"
 )
 
 var listCmd = &cobra.Command{

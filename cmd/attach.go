@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/spf13/cobra"
-	"work-orchestrator/pkg/config"
-	"work-orchestrator/pkg/issue"
-	"work-orchestrator/pkg/tmux"
+	"sbs/pkg/config"
+	"sbs/pkg/issue"
+	"sbs/pkg/tmux"
 )
 
 var attachCmd = &cobra.Command{

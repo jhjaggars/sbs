@@ -2,16 +2,16 @@
 
 # Build the application
 build:
-	go build -o work-orchestrator
+	go build -o sbs
 
 # Install to ~/bin (make sure ~/bin is in your PATH)
 install: build
 	mkdir -p ~/bin
-	cp work-orchestrator ~/bin/
+	cp sbs ~/bin/
 
 # Clean build artifacts
 clean:
-	rm -f work-orchestrator
+	rm -f sbs
 
 # Run tests
 test:
@@ -27,11 +27,11 @@ lint:
 
 # Run with example
 demo:
-	./work-orchestrator --help
+	./sbs --help
 
 # Development build with race detection
 dev:
-	go build -race -o work-orchestrator
+	go build -race -o sbs
 
 # Update dependencies
 deps:

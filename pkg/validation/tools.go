@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os/exec"
 
-	"work-orchestrator/pkg/issue"
-	"work-orchestrator/pkg/sandbox"
+	"sbs/pkg/issue"
+	"sbs/pkg/sandbox"
 )
 
 // CheckRequiredTools validates that all required external tools are available
