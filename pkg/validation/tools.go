@@ -37,7 +37,7 @@ func CheckRequiredTools() error {
 		for _, err := range errors {
 			errorMsg += "  - " + err + "\n"
 		}
-		return fmt.Errorf(errorMsg)
+		return fmt.Errorf("%s", errorMsg)
 	}
 	
 	return nil
