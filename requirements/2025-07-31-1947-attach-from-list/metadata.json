@@ -1,0 +1,22 @@
+{
+  "id": "attach-from-list",
+  "started": "2025-07-31T19:47:00Z",
+  "lastUpdated": "2025-07-31T19:47:00Z",
+  "status": "active",
+  "phase": "complete",
+  "progress": {
+    "discovery": { "answered": 5, "total": 5 },
+    "detail": { "answered": 5, "total": 5 }
+  },
+  "contextFiles": [
+    "pkg/tui/model.go",
+    "pkg/tui/issueselect.go",
+    "cmd/list.go",
+    "pkg/tmux/manager.go"
+  ],
+  "relatedFeatures": [
+    "issue selection TUI",
+    "tmux session management",
+    "help text patterns"
+  ]
+}
