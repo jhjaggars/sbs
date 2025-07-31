@@ -44,10 +44,6 @@ func (m *Manager) DetectCurrentRepository() (*Repository, error) {
 	}, nil
 }
 
-// GetSessionsPath returns the path to the repository-specific sessions file
-func (r *Repository) GetSessionsPath() string {
-	return filepath.Join(r.Root, ".sbs", "sessions.json")
-}
 
 // GetTmuxSessionName returns the repository-scoped tmux session name
 func (r *Repository) GetTmuxSessionName(issueNumber int) string {

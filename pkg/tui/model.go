@@ -327,22 +327,24 @@ func (m Model) toggleViewMode() Model {
 
 func (m Model) refreshSessions() tea.Cmd {
 	return func() tea.Msg {
+		// Always load from global sessions file
+		allSessions, err := config.LoadAllRepositorySessions()
+		if err != nil {
+			return refreshMsg{err: err}
+		}
+		
 		var sessions []config.SessionMetadata
-		var err error
 		
 		if m.viewMode == ViewModeRepository && m.currentRepo != nil {
-			// Load repository-specific sessions
-			sessionsPath := m.currentRepo.GetSessionsPath()
-			sessions, err = config.LoadSessionsFromPath(sessionsPath)
-			if err != nil {
-				return refreshMsg{err: err}
+			// Filter sessions for current repository
+			for _, session := range allSessions {
+				if session.RepositoryRoot == m.currentRepo.Root {
+					sessions = append(sessions, session)
+				}
 			}
 		} else {
-			// Load all sessions (global view)
-			sessions, err = config.LoadAllRepositorySessions()
-			if err != nil {
-				return refreshMsg{err: err}
-			}
+			// Show all sessions (global view)
+			sessions = allSessions
 		}
 		
 		tmuxSessions, err := m.tmuxManager.ListSessions()
