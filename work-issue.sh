@@ -1,19 +1,5 @@
 #!/bin/bash
 
-# set_title() {
-#     if [ -n "$TMUX" ]; then
-#         # We're in tmux - use tmux command
-#         tmux rename-window "$1"
-#     else
-#         # Regular terminal - use ANSI escape sequence
-#         printf '\033]0;%s\007' "$1"
-#     fi
-# }
-#
-# TITLE=(gh issue view $1 --json title -q .title)
-#
-# set_title "✻ $TITLE"
-
 # Function to extract repository name
 get_repo_name() {
   # First try to get name from git remote
