@@ -4,24 +4,33 @@ import (
 	"fmt"
 	"strconv"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
 	"sbs/pkg/git"
 	"sbs/pkg/issue"
 	"sbs/pkg/repo"
 	"sbs/pkg/tmux"
+	"sbs/pkg/tui"
 )
 
 var startCmd = &cobra.Command{
-	Use:   "start <issue-number>",
+	Use:   "start [issue-number]",
 	Short: "Start a new issue work environment",
 	Long: `Create or resume a work environment for a GitHub issue.
+
+When run with an issue number:
+  sbs start 123
+
+When run without arguments, launches interactive issue selection:
+  sbs start
+
 This command will:
 1. Create/switch to an issue branch (issue-<number>-<slug>)
 2. Create/use a worktree in ~/.work-issue-worktrees/
 3. Create/attach to a tmux session (work-issue-<number>)
 4. Launch work-issue.sh in the session`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runStart,
 }
 
@@ -31,19 +40,38 @@ func init() {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	issueNumberStr := args[0]
-	issueNumber, err := strconv.Atoi(issueNumberStr)
-	if err != nil {
-		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
-	}
-	
 	resume, _ := cmd.Flags().GetBool("resume")
 	
-	// Initialize repository context
+	// Initialize repository context first (required for both modes)
 	repoManager := repo.NewManager()
 	currentRepo, err := repoManager.DetectCurrentRepository()
 	if err != nil {
 		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+	
+	// Determine issue number - either from args or interactive selection
+	var issueNumber int
+	if len(args) == 0 {
+		// No arguments provided - launch interactive issue selection
+		selectedIssue, err := runInteractiveIssueSelection()
+		if err != nil {
+			return fmt.Errorf("failed to select issue: %w", err)
+		}
+		if selectedIssue == nil {
+			// User quit the selection
+			fmt.Println("Issue selection cancelled.")
+			return nil
+		}
+		issueNumber = selectedIssue.Number
+		fmt.Printf("Selected issue #%d: %s\n", selectedIssue.Number, selectedIssue.Title)
+	} else {
+		// Issue number provided as argument
+		issueNumberStr := args[0]
+		var err error
+		issueNumber, err = strconv.Atoi(issueNumberStr)
+		if err != nil {
+			return fmt.Errorf("invalid issue number: %s", issueNumberStr)
+		}
 	}
 	
 	// Initialize managers
@@ -150,6 +178,39 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	fmt.Printf("\nWork environment ready! Use 'work-orchestrator attach %d' to connect.\n", issueNumber)
+	fmt.Printf("\nWork environment ready! Use 'sbs attach %d' to connect.\n", issueNumber)
 	return nil
+}
+
+// runInteractiveIssueSelection launches the TUI for issue selection
+func runInteractiveIssueSelection() (*issue.Issue, error) {
+	// Initialize GitHub client
+	githubClient := issue.NewGitHubClient()
+	
+	// Create and run the issue selection TUI
+	model := tui.NewIssueSelectModel(githubClient)
+	
+	program := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := program.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run issue selection interface: %w", err)
+	}
+	
+	// Extract the result from the final model
+	issueSelectModel, ok := finalModel.(*tui.IssueSelectModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type returned from TUI")
+	}
+	
+	// Check if user quit or selected an issue
+	if issueSelectModel.IsQuit() {
+		return nil, nil // User quit - this is not an error
+	}
+	
+	selectedIssue := issueSelectModel.GetSelectedIssue()
+	if selectedIssue == nil {
+		return nil, fmt.Errorf("no issue was selected")
+	}
+	
+	return selectedIssue, nil
 }
