@@ -25,7 +25,7 @@ func NewManager() *Manager {
 	return &Manager{}
 }
 
-func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string) (*Session, error) {
+func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string, env ...map[string]string) (*Session, error) {
 	// sessionName is now provided by the caller (repository-aware)
 
 	// Check if session already exists
@@ -40,6 +40,13 @@ func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string)
 			return nil, fmt.Errorf("failed to update session working directory: %w", err)
 		}
 
+		// Set environment variables if provided
+		if len(env) > 0 && env[0] != nil {
+			if err := m.setEnvironmentVariables(sessionName, env[0]); err != nil {
+				return nil, fmt.Errorf("failed to set environment variables: %w", err)
+			}
+		}
+
 		return &Session{
 			Name:         sessionName,
 			WorkingDir:   workingDir,
@@ -50,10 +57,27 @@ func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string)
 		}, nil
 	}
 
-	// Create new detached session
+	// Create new detached session with environment variables
 	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", workingDir)
+
+	// Set environment variables for the tmux command
+	if len(env) > 0 && env[0] != nil {
+		cmdEnv := os.Environ()
+		for key, value := range env[0] {
+			cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", key, value))
+		}
+		cmd.Env = cmdEnv
+	}
+
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("failed to create tmux session %s: %w", sessionName, err)
+	}
+
+	// Set environment variables in the session after creation
+	if len(env) > 0 && env[0] != nil {
+		if err := m.setEnvironmentVariables(sessionName, env[0]); err != nil {
+			return nil, fmt.Errorf("failed to set environment variables: %w", err)
+		}
 	}
 
 	now := time.Now()
@@ -80,18 +104,32 @@ func (m *Manager) SessionExists(sessionName string) (bool, error) {
 	return true, nil
 }
 
-func (m *Manager) AttachToSession(sessionName string) error {
+func (m *Manager) AttachToSession(sessionName string, env ...map[string]string) error {
 	// Find tmux executable path
 	tmuxPath, err := exec.LookPath("tmux")
 	if err != nil {
 		return fmt.Errorf("tmux command not found: %w", err)
 	}
 
+	// Set environment variables in the session before attaching
+	if len(env) > 0 && env[0] != nil {
+		if err := m.setEnvironmentVariables(sessionName, env[0]); err != nil {
+			return fmt.Errorf("failed to set environment variables: %w", err)
+		}
+	}
+
 	// Replace current process with tmux attach
 	args := []string{"tmux", "attach-session", "-t", sessionName}
-	env := os.Environ()
+	execEnv := os.Environ()
 
-	err = syscall.Exec(tmuxPath, args, env)
+	// Add environment variables to the exec environment
+	if len(env) > 0 && env[0] != nil {
+		for key, value := range env[0] {
+			execEnv = append(execEnv, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	err = syscall.Exec(tmuxPath, args, execEnv)
 	if err != nil {
 		return fmt.Errorf("failed to exec tmux attach: %w", err)
 	}
@@ -167,7 +205,14 @@ func (m *Manager) ListSessions() ([]*Session, error) {
 	return sessions, nil
 }
 
-func (m *Manager) StartWorkIssue(sessionName string, issueNumber int, workIssueScript string) error {
+func (m *Manager) StartWorkIssue(sessionName string, issueNumber int, workIssueScript string, env ...map[string]string) error {
+	// Set environment variables in the session before executing command
+	if len(env) > 0 && env[0] != nil {
+		if err := m.setEnvironmentVariables(sessionName, env[0]); err != nil {
+			return fmt.Errorf("failed to set environment variables: %w", err)
+		}
+	}
+
 	// Send command to run work-issue script in the session
 	command := fmt.Sprintf("%s %d", workIssueScript, issueNumber)
 	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, command, "Enter")
@@ -180,12 +225,23 @@ func (m *Manager) StartWorkIssue(sessionName string, issueNumber int, workIssueS
 }
 
 // ExecuteCommand executes a flexible command in the tmux session
-func (m *Manager) ExecuteCommand(sessionName, command string, args []string) error {
-	return m.ExecuteCommandWithSubstitution(sessionName, command, args, nil)
+func (m *Manager) ExecuteCommand(sessionName, command string, args []string, env ...map[string]string) error {
+	var envVars map[string]string
+	if len(env) > 0 {
+		envVars = env[0]
+	}
+	return m.ExecuteCommandWithSubstitution(sessionName, command, args, nil, envVars)
 }
 
 // ExecuteCommandWithSubstitution executes a command with parameter substitution
-func (m *Manager) ExecuteCommandWithSubstitution(sessionName, command string, args []string, substitutions map[string]string) error {
+func (m *Manager) ExecuteCommandWithSubstitution(sessionName, command string, args []string, substitutions map[string]string, env ...map[string]string) error {
+	// Set environment variables in the session before executing command
+	if len(env) > 0 && env[0] != nil {
+		if err := m.setEnvironmentVariables(sessionName, env[0]); err != nil {
+			return fmt.Errorf("failed to set environment variables: %w", err)
+		}
+	}
+
 	// Build the full command string
 	var fullCommand string
 	if len(args) > 0 {
@@ -263,4 +319,138 @@ func (m *Manager) extractIssueNumber(sessionName string) int {
 	}
 
 	return 0
+}
+
+// setEnvironmentVariables sets environment variables in a tmux session
+func (m *Manager) setEnvironmentVariables(sessionName string, env map[string]string) error {
+	if env == nil || len(env) == 0 {
+		return nil
+	}
+
+	for key, value := range env {
+		cmd := exec.Command("tmux", "set-environment", "-t", sessionName, key, value)
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to set environment variable %s=%s: %w", key, value, err)
+		}
+	}
+
+	return nil
+}
+
+// formatEnvironmentVariables formats environment variables for testing and display
+func (m *Manager) formatEnvironmentVariables(env map[string]string) []string {
+	if env == nil || len(env) == 0 {
+		return []string{}
+	}
+
+	var result []string
+	for key, value := range env {
+		result = append(result, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	return result
+}
+
+// CreateTmuxEnvironment creates a map with SBS_TITLE environment variable
+func CreateTmuxEnvironment(friendlyTitle string) map[string]string {
+	return map[string]string{
+		"SBS_TITLE": friendlyTitle,
+	}
+}
+
+// GenerateFriendlyTitle generates a sandbox-friendly title from issue information
+func GenerateFriendlyTitle(repoName string, issueNumber int, issueTitle string) string {
+	// Import repo manager to use SanitizeName
+	if strings.TrimSpace(issueTitle) == "" {
+		// Fallback format when title is unavailable
+		return fmt.Sprintf("%s-issue-%d", sanitizeRepoName(repoName), issueNumber)
+	}
+
+	// Use sanitization logic similar to repo manager
+	return sanitizeTitle(issueTitle, 32)
+}
+
+// sanitizeRepoName sanitizes repository name for use in fallback title
+func sanitizeRepoName(name string) string {
+	if name == "" {
+		return "repo"
+	}
+	return sanitizeTitle(name, 20) // Shorter limit for repo name part
+}
+
+// sanitizeTitle sanitizes a title string for sandbox use
+func sanitizeTitle(title string, maxLength int) string {
+	if title == "" {
+		return ""
+	}
+
+	// Normalize and remove special characters
+	result := normalizeTitle(title)
+
+	// Replace non-alphanumeric with hyphens
+	result = strings.ToLower(result)
+	result = strings.ReplaceAll(result, " ", "-")
+
+	// Remove non-alphanumeric except hyphens
+	var clean strings.Builder
+	for _, r := range result {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			clean.WriteRune(r)
+		} else {
+			clean.WriteRune('-')
+		}
+	}
+	result = clean.String()
+
+	// Remove duplicate hyphens
+	for strings.Contains(result, "--") {
+		result = strings.ReplaceAll(result, "--", "-")
+	}
+
+	// Trim hyphens from ends
+	result = strings.Trim(result, "-")
+
+	// Apply length limit with word boundary consideration
+	if len(result) > maxLength {
+		truncated := result[:maxLength]
+		// Try to find last hyphen for clean break
+		if lastHyphen := strings.LastIndex(truncated, "-"); lastHyphen > 0 && lastHyphen < maxLength-1 {
+			result = truncated[:lastHyphen]
+		} else {
+			result = truncated
+		}
+		result = strings.TrimSuffix(result, "-")
+	}
+
+	return result
+}
+
+// normalizeTitle normalizes Unicode characters in title
+func normalizeTitle(title string) string {
+	// Simple ASCII replacements for common characters
+	replacements := map[rune]string{
+		'é': "e", 'è': "e", 'ê': "e", 'ë': "e",
+		'á': "a", 'à': "a", 'â': "a", 'ä': "a",
+		'í': "i", 'ì': "i", 'î': "i", 'ï': "i",
+		'ó': "o", 'ò': "o", 'ô': "o", 'ö': "o",
+		'ú': "u", 'ù': "u", 'û': "u", 'ü': "u",
+		'ç': "c", 'ñ': "n",
+		'É': "E", 'È': "E", 'Ê': "E", 'Ë': "E",
+		'Á': "A", 'À': "A", 'Â': "A", 'Ä': "A",
+		'Í': "I", 'Ì': "I", 'Î': "I", 'Ï': "I",
+		'Ó': "O", 'Ò': "O", 'Ô': "O", 'Ö': "O",
+		'Ú': "U", 'Ù': "U", 'Û': "U", 'Ü': "U",
+		'Ç': "C", 'Ñ': "N",
+	}
+
+	var result strings.Builder
+	for _, r := range title {
+		if replacement, exists := replacements[r]; exists {
+			result.WriteString(replacement)
+		} else {
+			result.WriteRune(r)
+		}
+	}
+
+	return result.String()
 }

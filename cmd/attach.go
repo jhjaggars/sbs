@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
 	"sbs/pkg/issue"
+	"sbs/pkg/repo"
 	"sbs/pkg/tmux"
 )
 
@@ -61,6 +62,24 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Warning: failed to update session activity: %v\n", err)
 	}
 
-	fmt.Printf("Attaching to session for issue #%d...\n", issueNumber)
-	return tmuxManager.AttachToSession(session.TmuxSession)
+	// Create environment variables with friendly title if available
+	var tmuxEnv map[string]string
+	if session.FriendlyTitle != "" {
+		tmuxEnv = tmux.CreateTmuxEnvironment(session.FriendlyTitle)
+		fmt.Printf("Attaching to session for issue #%d (SBS_TITLE=%s)...\n", issueNumber, session.FriendlyTitle)
+	} else {
+		// Fallback: generate friendly title if not stored
+		// Load repository context to get repo name
+		repoManager := repo.NewManager()
+		currentRepo, err := repoManager.DetectCurrentRepository()
+		if err == nil {
+			friendlyTitle := tmux.GenerateFriendlyTitle(currentRepo.Name, issueNumber, session.IssueTitle)
+			tmuxEnv = tmux.CreateTmuxEnvironment(friendlyTitle)
+			fmt.Printf("Attaching to session for issue #%d (SBS_TITLE=%s, generated)...\n", issueNumber, friendlyTitle)
+		} else {
+			fmt.Printf("Attaching to session for issue #%d...\n", issueNumber)
+		}
+	}
+
+	return tmuxManager.AttachToSession(session.TmuxSession, tmuxEnv)
 }

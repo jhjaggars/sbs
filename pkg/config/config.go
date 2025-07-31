@@ -19,6 +19,7 @@ type Config struct {
 type SessionMetadata struct {
 	IssueNumber    int    `json:"issue_number"`
 	IssueTitle     string `json:"issue_title"`
+	FriendlyTitle  string `json:"friendly_title"` // Sandbox-friendly version of issue title
 	Branch         string `json:"branch"`
 	WorktreePath   string `json:"worktree_path"`
 	TmuxSession    string `json:"tmux_session"`

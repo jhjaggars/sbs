@@ -131,6 +131,10 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Working on issue #%d: %s\n", githubIssue.Number, githubIssue.Title)
 
+	// Generate friendly title for sandbox environment
+	friendlyTitle := tmux.GenerateFriendlyTitle(currentRepo.Name, issueNumber, githubIssue.Title)
+	fmt.Printf("Friendly title: %s\n", friendlyTitle)
+
 	// Create or switch to issue branch
 	branch, err := gitManager.CreateIssueBranch(issueNumber, githubIssue.Title)
 	if err != nil {
@@ -145,20 +149,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Worktree created at: %s\n", worktreePath)
 
-	// Create tmux session with repository-scoped name
+	// Create environment variables for tmux session
+	tmuxEnv := tmux.CreateTmuxEnvironment(friendlyTitle)
+
+	// Create tmux session with repository-scoped name and environment variables
 	tmuxSessionName := currentRepo.GetTmuxSessionName(issueNumber)
-	session, err := tmuxManager.CreateSession(issueNumber, worktreePath, tmuxSessionName)
+	session, err := tmuxManager.CreateSession(issueNumber, worktreePath, tmuxSessionName, tmuxEnv)
 	if err != nil {
 		return fmt.Errorf("failed to create tmux session: %w", err)
 	}
-	fmt.Printf("Tmux session created: %s\n", session.Name)
+	fmt.Printf("Tmux session created: %s (SBS_TITLE=%s)\n", session.Name, friendlyTitle)
 
 	// Get repository-scoped sandbox name
 	sandboxName := currentRepo.GetSandboxName(issueNumber)
 
 	// Create or update session metadata
 	sessionMetadata := issueTracker.CreateSessionMetadata(
-		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName, currentRepo.Name, currentRepo.Root)
+		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName, currentRepo.Name, currentRepo.Root, friendlyTitle)
 
 	// Update sessions list
 	if existingSession != nil {
@@ -193,7 +200,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		} else if customCommand != "" {
 			// Custom command from command line
 			fmt.Printf("Executing custom command in session: %s\n", customCommand)
-			if err := tmuxManager.ExecuteCommand(session.Name, customCommand, nil); err != nil {
+			if err := tmuxManager.ExecuteCommand(session.Name, customCommand, nil, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to execute custom command: %v\n", err)
 			}
 		} else if repoConfig.NoCommand {
@@ -208,13 +215,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 				"$1": fmt.Sprintf("%d", issueNumber),
 			}
 
-			if err := tmuxManager.ExecuteCommandWithSubstitution(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs, substitutions); err != nil {
+			if err := tmuxManager.ExecuteCommandWithSubstitution(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs, substitutions, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to execute repository command: %v\n", err)
 			}
 		} else {
 			// Default behavior - execute work-issue.sh
 			fmt.Printf("Starting work-issue.sh in session...\n")
-			if err := tmuxManager.StartWorkIssue(session.Name, issueNumber, repoConfig.WorkIssueScript); err != nil {
+			if err := tmuxManager.StartWorkIssue(session.Name, issueNumber, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
 			}
 		}

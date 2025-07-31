@@ -7,8 +7,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/go-git/go-git/v5"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 type Repository struct {
@@ -146,10 +150,18 @@ func (m *Manager) IsGitRepository() bool {
 }
 
 // SanitizeName sanitizes a repository name for use in file/session names
-func (m *Manager) SanitizeName(name string) string {
+func (m *Manager) SanitizeName(name string, maxLength ...int) string {
+	// Handle empty input
+	if name == "" {
+		return ""
+	}
+
+	// First normalize Unicode characters and remove diacritics
+	sanitized := m.normalizeUnicode(name)
+
 	// Remove special characters and replace with hyphens
 	reg := regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	sanitized := reg.ReplaceAllString(name, "-")
+	sanitized = reg.ReplaceAllString(sanitized, "-")
 
 	// Trim hyphens from start and end
 	sanitized = strings.Trim(sanitized, "-")
@@ -157,11 +169,45 @@ func (m *Manager) SanitizeName(name string) string {
 	// Convert to lowercase
 	sanitized = strings.ToLower(sanitized)
 
-	// Limit length
-	if len(sanitized) > 30 {
-		sanitized = sanitized[:30]
+	// Determine length limit
+	lengthLimit := 30 // Default for backward compatibility
+	if len(maxLength) > 0 && maxLength[0] > 0 {
+		lengthLimit = maxLength[0]
+	} else if len(maxLength) > 0 && maxLength[0] == 0 {
+		// maxLength of 0 means use existing behavior (30 chars)
+		lengthLimit = 30
+	}
+
+	// Apply length limit
+	if len(sanitized) > lengthLimit {
+		// Try to truncate at word boundary (hyphen)
+		truncated := sanitized[:lengthLimit]
+
+		// Find last hyphen to truncate at word boundary
+		lastHyphen := strings.LastIndex(truncated, "-")
+		if lastHyphen > 0 && lastHyphen < lengthLimit-1 {
+			// Truncate at word boundary if there's a hyphen not at the very end
+			sanitized = truncated[:lastHyphen]
+		} else {
+			// No good word boundary found, just truncate
+			sanitized = truncated
+		}
+
+		// Ensure we don't end with a hyphen
 		sanitized = strings.TrimSuffix(sanitized, "-")
 	}
 
 	return sanitized
+}
+
+// normalizeUnicode normalizes Unicode characters and removes diacritics
+func (m *Manager) normalizeUnicode(input string) string {
+	// Transform to remove diacritics and normalize
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	result, _, err := transform.String(t, input)
+	if err != nil {
+		// If transformation fails, fall back to original string
+		return input
+	}
+	return result
 }
