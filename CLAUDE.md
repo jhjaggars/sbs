@@ -23,6 +23,13 @@ make lint           # Run golangci-lint (requires golangci-lint installed)
 go test ./...       # Run tests directly
 ```
 
+### Git Hooks Setup
+```bash
+./scripts/install-hooks.sh  # Install pre-commit hook for automatic code formatting
+```
+
+The pre-commit hook automatically runs `make fmt` before each commit to ensure consistent code formatting. To temporarily bypass the hook, use `git commit --no-verify`.
+
 ### Development Workflow
 ```bash
 go run . start 123  # Run without building
