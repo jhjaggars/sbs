@@ -4,35 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is a minimal shell script repository containing a single bash script `work-issue.sh` that provides a wrapper for launching Claude Code in a sandboxed environment to work on GitHub issues.
+SBS (Sandbox Sessions) is a Go CLI application that orchestrates GitHub issue work environments with automatic git worktree and tmux session management. It creates isolated development environments for each GitHub issue.
+
+## Common Development Commands
+
+### Build and Install
+```bash
+make build          # Build the sbs binary
+make install        # Install to ~/bin
+make dev            # Build with race detection
+```
+
+### Testing and Code Quality
+```bash
+make test           # Run all tests
+make fmt            # Format Go code
+make lint           # Run golangci-lint (requires golangci-lint installed)
+go test ./...       # Run tests directly
+```
+
+### Development Workflow
+```bash
+go run . start 123  # Run without building
+./sbs start 123     # Start session for issue #123
+./sbs list          # List active sessions (interactive TUI)
+./sbs attach 123    # Attach to existing session
+./sbs stop 123      # Stop a session
+./sbs clean         # Clean up stale sessions
+```
 
 ## Architecture
 
-The repository contains only one file:
-- `work-issue.sh`: A bash script that sets terminal/tmux window titles and launches Claude Code in a sandbox environment with specific parameters
+### Core Components
+- **CLI Framework**: Built with Cobra for command structure
+- **Interactive TUI**: Uses Bubble Tea and Lipgloss for terminal UI
+- **Git Integration**: go-git for worktree and branch management
+- **Session Management**: Tracks metadata in JSON files
 
-## Key Script Functionality
+### Package Structure
+- `cmd/`: Cobra command definitions (start, stop, list, attach, clean)
+- `pkg/config/`: Configuration management and session metadata
+- `pkg/git/`: Git operations and worktree management
+- `pkg/tmux/`: Tmux session management
+- `pkg/sandbox/`: Sandbox environment coordination
+- `pkg/tui/`: Terminal UI components and styling
+- `pkg/issue/`: GitHub issue integration
+- `pkg/repo/`: Repository management
+- `pkg/validation/`: Tool validation utilities
 
-The `work-issue.sh` script:
-1. Takes a GitHub issue number as an argument ($1)
-2. Sets the terminal/tmux window title to include the issue title (fetched via `gh issue view`)
-3. Launches Claude Code in a sandbox with network access and tmux binding
-4. Uses the "sonnet" model with permissions skipped
-5. Passes the issue number as a parameter to Claude Code
+### Configuration
+- Config stored in `~/.config/sbs/config.json`
+- Sessions tracked in `~/.config/sbs/sessions.json` (global) and repository-specific files
+- Worktrees created in `~/.work-issue-worktrees/` by default
 
-## Dependencies
+### Session Lifecycle
+1. Creates git branch `issue-{number}-{title-slug}`
+2. Creates worktree in configured directory
+3. Launches tmux session `work-issue-{number}`
+4. Executes `work-issue.sh` script in sandboxed environment
+5. Tracks session metadata for management
 
-The script requires:
-- `gh` (GitHub CLI) for fetching issue information
-- `tmux` support for window renaming
+### Dependencies
+- Git with worktree support
+- tmux for session management
+- GitHub CLI (`gh`) for issue metadata
 - `sandbox` command for containerized execution
-- Claude Code CLI installed at `~/.claude/local/claude`
-
-## Usage
-
-Execute the script with a GitHub issue number:
-```bash
-./work-issue.sh <issue-number>
-```
-
-This will launch Claude Code in a sandboxed environment specifically configured to work on the specified GitHub issue.
+- `work-issue.sh` script integration
