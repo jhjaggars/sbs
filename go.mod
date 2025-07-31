@@ -9,6 +9,7 @@ require (
 	github.com/go-git/go-git/v5 v5.11.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/term v0.31.0
 )
 
 require (

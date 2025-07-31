@@ -8,19 +8,19 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	
+
 	"sbs/pkg/config"
 	"sbs/pkg/repo"
 	"sbs/pkg/tmux"
 )
 
 type keyMap struct {
-	Up        key.Binding
-	Down      key.Binding
-	Enter     key.Binding
-	Quit      key.Binding
-	Help      key.Binding
-	Refresh   key.Binding
+	Up         key.Binding
+	Down       key.Binding
+	Enter      key.Binding
+	Quit       key.Binding
+	Help       key.Binding
+	Refresh    key.Binding
 	ToggleView key.Binding
 }
 
@@ -79,13 +79,13 @@ type Model struct {
 func NewModel() Model {
 	repoManager := repo.NewManager()
 	currentRepo, _ := repoManager.DetectCurrentRepository()
-	
+
 	// Default to repository view if in a repo, global otherwise
 	viewMode := ViewModeGlobal
 	if currentRepo != nil {
 		viewMode = ViewModeRepository
 	}
-	
+
 	return Model{
 		sessions:    []config.SessionMetadata{},
 		cursor:      0,
@@ -110,55 +110,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
-		
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
-			
+
 		case key.Matches(msg, keys.Up):
 			if m.cursor > 0 {
 				m.cursor--
 			}
 			return m, nil
-			
+
 		case key.Matches(msg, keys.Down):
 			if m.cursor < len(m.sessions)-1 {
 				m.cursor++
 			}
 			return m, nil
-			
+
 		case key.Matches(msg, keys.Enter):
 			if len(m.sessions) > 0 && m.cursor < len(m.sessions) {
 				sessionName := m.sessions[m.cursor].TmuxSession
 				return m, m.attachToSession(sessionName)
 			}
 			return m, nil
-			
+
 		case key.Matches(msg, keys.Help):
 			m.showHelp = !m.showHelp
 			return m, nil
-			
+
 		case key.Matches(msg, keys.Refresh):
 			return m, m.refreshSessions()
-			
+
 		case key.Matches(msg, keys.ToggleView):
 			return m.toggleViewMode(), m.refreshSessions()
 		}
-		
+
 	case refreshMsg:
 		m.sessions = msg.sessions
 		m.tmuxSessions = msg.tmuxSessions
 		m.error = msg.err
 		return m, nil
-		
+
 	case attachMsg:
 		if msg.err != nil {
 			m.error = msg.err
 		}
 		return m, nil
 	}
-	
+
 	return m, nil
 }
 
@@ -166,9 +166,9 @@ func (m Model) View() string {
 	if m.error != nil {
 		return fmt.Sprintf("Error: %v\n\nPress q to quit", m.error)
 	}
-	
+
 	var b strings.Builder
-	
+
 	// Title with view mode indicator
 	var title string
 	if m.currentRepo != nil && m.viewMode == ViewModeRepository {
@@ -177,69 +177,64 @@ func (m Model) View() string {
 		title = titleStyle.Render("Work Issue Orchestrator (Global)")
 	}
 	b.WriteString(title + "\n\n")
-	
+
 	// Sessions list
 	if len(m.sessions) == 0 {
 		b.WriteString(mutedStyle.Render("No active work sessions found.") + "\n")
 		b.WriteString(mutedStyle.Render("Use 'work-orchestrator start <issue-number>' to create a new session.") + "\n")
 	} else {
-		// Table header - include repository column in global view
+		// Calculate responsive column widths based on terminal width
+		var widths ColumnWidths
 		var headerRow string
+
 		if m.viewMode == ViewModeGlobal {
-			headerRow = fmt.Sprintf("%-6s %-35s %-15s %-15s %-10s %-15s",
-				"Issue", "Title", "Repository", "Branch", "Status", "Last Activity")
+			widths = CalculateGlobalViewWidths(m.width)
+			headerRow = FormatGlobalViewHeader(widths)
 		} else {
-			headerRow = fmt.Sprintf("%-6s %-50s %-20s %-10s %-15s",
-				"Issue", "Title", "Branch", "Status", "Last Activity")
+			widths = CalculateRepositoryViewWidths(m.width)
+			headerRow = FormatRepositoryViewHeader(widths)
 		}
+
 		b.WriteString(tableHeaderStyle.Render(headerRow) + "\n")
-		
+
 		// Sessions
 		for i, session := range m.sessions {
 			// Determine actual status by checking tmux
 			status := m.getSessionStatus(session.TmuxSession)
-			
-			// Format row based on view mode
-			var row string
 			lastActivity := m.formatTimeAgo(session.LastActivity)
-			
+
+			// Format row based on view mode using responsive widths
+			var row string
 			if m.viewMode == ViewModeGlobal {
-				title := TruncateString(session.IssueTitle, 33)
-				repo := TruncateString(session.RepositoryName, 13)
-				branch := TruncateString(session.Branch, 13)
-				
-				row = fmt.Sprintf("%-6d %-35s %-15s %-15s %-10s %-15s",
+				row = FormatGlobalViewRow(widths,
 					session.IssueNumber,
-					title,
-					repo,
-					branch,
+					session.IssueTitle,
+					session.RepositoryName,
+					session.Branch,
 					FormatStatus(status),
 					lastActivity,
 				)
 			} else {
-				title := TruncateString(session.IssueTitle, 48)
-				branch := TruncateString(session.Branch, 18)
-				
-				row = fmt.Sprintf("%-6d %-50s %-20s %-10s %-15s",
+				row = FormatRepositoryViewRow(widths,
 					session.IssueNumber,
-					title,
-					branch,
+					session.IssueTitle,
+					session.Branch,
 					FormatStatus(status),
 					lastActivity,
 				)
 			}
-			
+
 			// Apply selection style
 			if i == m.cursor {
 				row = selectedRowStyle.Render(row)
 			} else {
 				row = tableCellStyle.Render(row)
 			}
-			
+
 			b.WriteString(row + "\n")
 		}
 	}
-	
+
 	// Help
 	if m.showHelp {
 		b.WriteString("\n" + m.helpView())
@@ -250,7 +245,7 @@ func (m Model) View() string {
 		}
 		b.WriteString(helpStyle.Render(helpText))
 	}
-	
+
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
@@ -283,7 +278,7 @@ func (m Model) formatTimeAgo(timeStr string) string {
 	if err != nil {
 		return "unknown"
 	}
-	
+
 	duration := time.Since(t)
 	if duration < time.Minute {
 		return "now"
@@ -312,16 +307,16 @@ func (m Model) toggleViewMode() Model {
 		// Can't toggle to repository view if not in a repository
 		return m
 	}
-	
+
 	if m.viewMode == ViewModeRepository {
 		m.viewMode = ViewModeGlobal
 	} else {
 		m.viewMode = ViewModeRepository
 	}
-	
+
 	// Reset cursor when switching views
 	m.cursor = 0
-	
+
 	return m
 }
 
@@ -332,9 +327,9 @@ func (m Model) refreshSessions() tea.Cmd {
 		if err != nil {
 			return refreshMsg{err: err}
 		}
-		
+
 		var sessions []config.SessionMetadata
-		
+
 		if m.viewMode == ViewModeRepository && m.currentRepo != nil {
 			// Filter sessions for current repository
 			for _, session := range allSessions {
@@ -346,12 +341,12 @@ func (m Model) refreshSessions() tea.Cmd {
 			// Show all sessions (global view)
 			sessions = allSessions
 		}
-		
+
 		tmuxSessions, err := m.tmuxManager.ListSessions()
 		if err != nil {
 			return refreshMsg{err: err}
 		}
-		
+
 		return refreshMsg{
 			sessions:     sessions,
 			tmuxSessions: tmuxSessions,
