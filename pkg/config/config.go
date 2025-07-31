@@ -7,10 +7,13 @@ import (
 )
 
 type Config struct {
-	WorktreeBasePath string `json:"worktree_base_path"`
-	GitHubToken      string `json:"github_token"`
-	WorkIssueScript  string `json:"work_issue_script"`
-	RepoPath         string `json:"repo_path"`
+	WorktreeBasePath string   `json:"worktree_base_path"`
+	GitHubToken      string   `json:"github_token"`
+	WorkIssueScript  string   `json:"work_issue_script"`
+	RepoPath         string   `json:"repo_path"`
+	TmuxCommand      string   `json:"tmux_command,omitempty"`      // Custom command to run in tmux session
+	TmuxCommandArgs  []string `json:"tmux_command_args,omitempty"` // Arguments for the custom command
+	NoCommand        bool     `json:"no_command,omitempty"`        // Disable automatic command execution
 }
 
 type SessionMetadata struct {
@@ -42,9 +45,9 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	configPath := filepath.Join(homeDir, ".config", "sbs", "config.json")
-	
+
 	// Create default config if doesn't exist
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		config := DefaultConfig()
@@ -53,18 +56,90 @@ func LoadConfig() (*Config, error) {
 		}
 		return config, nil
 	}
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
-	
+
 	return &config, nil
+}
+
+// LoadConfigWithRepository loads configuration with repository-specific overrides
+func LoadConfigWithRepository(repoRoot string) (*Config, error) {
+	// Load global config first
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Try to load repository-specific config
+	repoConfig, err := LoadRepositoryConfig(repoRoot)
+	if err != nil {
+		// If repository config doesn't exist or can't be loaded, just use global config
+		return config, nil
+	}
+
+	// Merge repository config over global config
+	mergedConfig := MergeConfig(config, repoConfig)
+	return mergedConfig, nil
+}
+
+// LoadRepositoryConfig loads configuration from .sbs/config.json in repository root
+func LoadRepositoryConfig(repoRoot string) (*Config, error) {
+	configPath := filepath.Join(repoRoot, ".sbs", "config.json")
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
+	}
+
+	return &config, nil
+}
+
+// MergeConfig merges repository config over base config, only overriding non-zero values
+func MergeConfig(base, override *Config) *Config {
+	merged := *base // Copy base config
+
+	if override.WorktreeBasePath != "" {
+		merged.WorktreeBasePath = override.WorktreeBasePath
+	}
+	if override.GitHubToken != "" {
+		merged.GitHubToken = override.GitHubToken
+	}
+	if override.WorkIssueScript != "" {
+		merged.WorkIssueScript = override.WorkIssueScript
+	}
+	if override.RepoPath != "" {
+		merged.RepoPath = override.RepoPath
+	}
+	if override.TmuxCommand != "" {
+		merged.TmuxCommand = override.TmuxCommand
+	}
+	if len(override.TmuxCommandArgs) > 0 {
+		merged.TmuxCommandArgs = make([]string, len(override.TmuxCommandArgs))
+		copy(merged.TmuxCommandArgs, override.TmuxCommandArgs)
+	}
+	// NoCommand is a boolean, so we only override if it's explicitly set to true
+	if override.NoCommand {
+		merged.NoCommand = override.NoCommand
+	}
+
+	return &merged
 }
 
 func SaveConfig(config *Config) error {
@@ -72,18 +147,18 @@ func SaveConfig(config *Config) error {
 	if err != nil {
 		return err
 	}
-	
+
 	configDir := filepath.Join(homeDir, ".config", "sbs")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err
 	}
-	
+
 	configPath := filepath.Join(configDir, "config.json")
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(configPath, data, 0644)
 }
 
@@ -92,17 +167,17 @@ func LoadSessionsFromPath(sessionsPath string) ([]SessionMetadata, error) {
 	if _, err := os.Stat(sessionsPath); os.IsNotExist(err) {
 		return []SessionMetadata{}, nil
 	}
-	
+
 	data, err := os.ReadFile(sessionsPath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var sessions []SessionMetadata
 	if err := json.Unmarshal(data, &sessions); err != nil {
 		return nil, err
 	}
-	
+
 	return sessions, nil
 }
 
@@ -112,12 +187,12 @@ func SaveSessionsToPath(sessions []SessionMetadata, sessionsPath string) error {
 	if err := os.MkdirAll(filepath.Dir(sessionsPath), 0755); err != nil {
 		return err
 	}
-	
+
 	data, err := json.MarshalIndent(sessions, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(sessionsPath, data, 0644)
 }
 
@@ -127,7 +202,7 @@ func LoadSessions() ([]SessionMetadata, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	sessionsPath := filepath.Join(homeDir, ".config", "sbs", "sessions.json")
 	return LoadSessionsFromPath(sessionsPath)
 }
@@ -138,7 +213,7 @@ func SaveSessions(sessions []SessionMetadata) error {
 	if err != nil {
 		return err
 	}
-	
+
 	configDir := filepath.Join(homeDir, ".config", "sbs")
 	sessionsPath := filepath.Join(configDir, "sessions.json")
 	return SaveSessionsToPath(sessions, sessionsPath)
@@ -150,4 +225,3 @@ func LoadAllRepositorySessions() ([]SessionMetadata, error) {
 	// Repository scoping is handled by filtering based on RepositoryRoot field
 	return LoadSessions()
 }
-

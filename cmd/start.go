@@ -37,18 +37,28 @@ This command will:
 func init() {
 	rootCmd.AddCommand(startCmd)
 	startCmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
+	startCmd.Flags().String("command", "", "Custom command to run in tmux session")
+	startCmd.Flags().Bool("no-command", false, "Start session without executing any command")
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
 	resume, _ := cmd.Flags().GetBool("resume")
-	
+	customCommand, _ := cmd.Flags().GetString("command")
+	noCommand, _ := cmd.Flags().GetBool("no-command")
+
 	// Initialize repository context first (required for both modes)
 	repoManager := repo.NewManager()
 	currentRepo, err := repoManager.DetectCurrentRepository()
 	if err != nil {
 		return fmt.Errorf("must be run from within a git repository: %w", err)
 	}
-	
+
+	// Load repository-aware configuration
+	repoConfig, err := config.LoadConfigWithRepository(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
 	// Determine issue number - either from args or interactive selection
 	var issueNumber int
 	if len(args) == 0 {
@@ -73,33 +83,33 @@ func runStart(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("invalid issue number: %s", issueNumberStr)
 		}
 	}
-	
+
 	// Initialize managers
 	gitManager, err := git.NewManager(currentRepo.Root)
 	if err != nil {
 		return fmt.Errorf("failed to initialize git manager: %w", err)
 	}
-	
+
 	tmuxManager := tmux.NewManager()
-	issueTracker := issue.NewTracker(cfg)
-	
+	issueTracker := issue.NewTracker(repoConfig)
+
 	// Load global sessions
 	sessions, err := config.LoadSessions()
 	if err != nil {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
-	
+
 	// Check if session already exists
 	existingSession := issueTracker.FindSessionByIssue(sessions, issueNumber)
 	if existingSession != nil {
 		fmt.Printf("Found existing session for issue #%d\n", issueNumber)
-		
+
 		// Check if tmux session exists
 		sessionExists, err := tmuxManager.SessionExists(existingSession.TmuxSession)
 		if err != nil {
 			return fmt.Errorf("failed to check tmux session: %w", err)
 		}
-		
+
 		if sessionExists {
 			fmt.Printf("Attaching to existing tmux session: %s\n", existingSession.TmuxSession)
 			return tmuxManager.AttachToSession(existingSession.TmuxSession)
@@ -107,7 +117,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Tmux session not found, recreating...\n")
 		}
 	}
-	
+
 	// Get issue information from GitHub using gh command
 	githubIssue, err := issueTracker.GetIssue(issueNumber)
 	if err != nil {
@@ -118,23 +128,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 			State:  "unknown",
 		}
 	}
-	
+
 	fmt.Printf("Working on issue #%d: %s\n", githubIssue.Number, githubIssue.Title)
-	
+
 	// Create or switch to issue branch
 	branch, err := gitManager.CreateIssueBranch(issueNumber, githubIssue.Title)
 	if err != nil {
 		return fmt.Errorf("failed to create issue branch: %w", err)
 	}
 	fmt.Printf("Using branch: %s\n", branch)
-	
+
 	// Create worktree using repository-aware path
 	worktreePath := currentRepo.GetWorktreePath(issueNumber)
 	if err := gitManager.CreateWorktree(branch, worktreePath); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
 	fmt.Printf("Worktree created at: %s\n", worktreePath)
-	
+
 	// Create tmux session with repository-scoped name
 	tmuxSessionName := currentRepo.GetTmuxSessionName(issueNumber)
 	session, err := tmuxManager.CreateSession(issueNumber, worktreePath, tmuxSessionName)
@@ -142,14 +152,14 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create tmux session: %w", err)
 	}
 	fmt.Printf("Tmux session created: %s\n", session.Name)
-	
+
 	// Get repository-scoped sandbox name
 	sandboxName := currentRepo.GetSandboxName(issueNumber)
-	
+
 	// Create or update session metadata
 	sessionMetadata := issueTracker.CreateSessionMetadata(
 		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName, currentRepo.Name, currentRepo.Root)
-	
+
 	// Update sessions list
 	if existingSession != nil {
 		// Update existing session
@@ -163,20 +173,47 @@ func runStart(cmd *cobra.Command, args []string) error {
 		// Add new session
 		sessions = append(sessions, *sessionMetadata)
 	}
-	
+
 	// Save updated sessions to global location
 	if err := config.SaveSessions(sessions); err != nil {
 		return fmt.Errorf("failed to save sessions: %w", err)
 	}
-	
-	// Launch work-issue.sh unless resuming
+
+	// Execute command in session unless resuming
 	if !resume {
-		fmt.Printf("Starting work-issue.sh in session...\n")
-		if err := tmuxManager.StartWorkIssue(session.Name, issueNumber, cfg.WorkIssueScript); err != nil {
-			fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
+		// Determine what command to execute based on precedence:
+		// 1. Command-line flags (--command, --no-command)
+		// 2. Repository config
+		// 3. Global config
+		// 4. Default behavior (work-issue.sh)
+
+		if noCommand {
+			// Explicitly requested no command execution
+			fmt.Printf("Session started without executing any command.\n")
+		} else if customCommand != "" {
+			// Custom command from command line
+			fmt.Printf("Executing custom command in session: %s\n", customCommand)
+			if err := tmuxManager.ExecuteCommand(session.Name, customCommand, nil); err != nil {
+				fmt.Printf("Warning: Failed to execute custom command: %v\n", err)
+			}
+		} else if repoConfig.NoCommand {
+			// Repository config specifies no command
+			fmt.Printf("Session started without executing any command (repository config).\n")
+		} else if repoConfig.TmuxCommand != "" {
+			// Repository config specifies custom command
+			fmt.Printf("Executing repository command in session: %s\n", repoConfig.TmuxCommand)
+			if err := tmuxManager.ExecuteCommand(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs); err != nil {
+				fmt.Printf("Warning: Failed to execute repository command: %v\n", err)
+			}
+		} else {
+			// Default behavior - execute work-issue.sh
+			fmt.Printf("Starting work-issue.sh in session...\n")
+			if err := tmuxManager.StartWorkIssue(session.Name, issueNumber, repoConfig.WorkIssueScript); err != nil {
+				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
+			}
 		}
 	}
-	
+
 	fmt.Printf("\nWork environment ready! Use 'sbs attach %d' to connect.\n", issueNumber)
 	return nil
 }
@@ -185,31 +222,31 @@ func runStart(cmd *cobra.Command, args []string) error {
 func runInteractiveIssueSelection() (*issue.Issue, error) {
 	// Initialize GitHub client
 	githubClient := issue.NewGitHubClient()
-	
+
 	// Create and run the issue selection TUI
 	model := tui.NewIssueSelectModel(githubClient)
-	
+
 	program := tea.NewProgram(model, tea.WithAltScreen())
 	finalModel, err := program.Run()
 	if err != nil {
 		return nil, fmt.Errorf("failed to run issue selection interface: %w", err)
 	}
-	
+
 	// Extract the result from the final model
 	issueSelectModel, ok := finalModel.(*tui.IssueSelectModel)
 	if !ok {
 		return nil, fmt.Errorf("unexpected model type returned from TUI")
 	}
-	
+
 	// Check if user quit or selected an issue
 	if issueSelectModel.IsQuit() {
 		return nil, nil // User quit - this is not an error
 	}
-	
+
 	selectedIssue := issueSelectModel.GetSelectedIssue()
 	if selectedIssue == nil {
 		return nil, fmt.Errorf("no issue was selected")
 	}
-	
+
 	return selectedIssue, nil
 }
