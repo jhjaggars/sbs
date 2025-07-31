@@ -1,4 +1,4 @@
 {
-  "tmux_command": "echo",
-  "tmux_command_args": ["Repository config test - Custom command from .sbs/config.json"]
+  "tmux_command": "./work-issue.sh",
+  "tmux_command_args": ["$1"]
 }
