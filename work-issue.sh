@@ -41,7 +41,7 @@ update_claude_project_trust() {
   
   # Update or create the project entry with hasTrustDialogAccepted: true
   jq --arg path "$project_path" '
-    .projects[$path] = ((.projects[$path] // {}) + {"hasTrustDialogAccepted": true})
+    .projects[$path] = ((.projects[$path] // {}) + {"allowedTools": [], "hasTrustDialogAccepted": true, "hasCompletedProjectOnboarding": true})
   ' "$claude_config" > "$temp_file"
   
   if [ $? -eq 0 ]; then
