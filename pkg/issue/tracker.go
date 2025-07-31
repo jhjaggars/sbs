@@ -26,12 +26,13 @@ func (t *Tracker) GetIssue(issueNumber int) (*Issue, error) {
 	return t.githubClient.GetIssue(issueNumber)
 }
 
-func (t *Tracker) CreateSessionMetadata(issueNumber int, issue *Issue, branch, worktreePath, tmuxSession, sandboxName, repoName, repoRoot string) *config.SessionMetadata {
+func (t *Tracker) CreateSessionMetadata(issueNumber int, issue *Issue, branch, worktreePath, tmuxSession, sandboxName, repoName, repoRoot, friendlyTitle string) *config.SessionMetadata {
 	now := time.Now().Format(time.RFC3339)
 
 	return &config.SessionMetadata{
 		IssueNumber:    issueNumber,
 		IssueTitle:     issue.Title,
+		FriendlyTitle:  friendlyTitle,
 		Branch:         branch,
 		WorktreePath:   worktreePath,
 		TmuxSession:    tmuxSession,

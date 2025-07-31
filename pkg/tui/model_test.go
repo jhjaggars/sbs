@@ -55,14 +55,14 @@ func TestModel_HelpText(t *testing.T) {
 
 		// Assert - Check that "enter to attach" appears in condensed help
 		assert.Contains(t, view, "enter to attach", "Repository view condensed help should contain 'enter to attach'")
-		
+
 		// Assert - Check that "enter to attach" appears first in help text
 		helpTextStart := strings.Index(view, "Press ")
 		if helpTextStart != -1 {
 			helpLine := view[helpTextStart:]
 			enterIndex := strings.Index(helpLine, "enter to attach")
 			questionIndex := strings.Index(helpLine, "? for help")
-			
+
 			assert.True(t, enterIndex != -1, "Help text should contain 'enter to attach'")
 			assert.True(t, questionIndex != -1, "Help text should contain '? for help'")
 			assert.True(t, enterIndex < questionIndex, "'enter to attach' should appear before '? for help'")
@@ -84,15 +84,15 @@ func TestModel_HelpText(t *testing.T) {
 
 		// Assert - Check that "enter to attach" appears in condensed help
 		assert.Contains(t, view, "enter to attach", "Global view condensed help should contain 'enter to attach'")
-		
+
 		// Assert - Check that "enter to attach" appears first in help text
 		helpTextStart := strings.Index(view, "Press ")
 		if helpTextStart != -1 {
 			helpLine := view[helpTextStart:]
 			enterIndex := strings.Index(helpLine, "enter to attach")
 			questionIndex := strings.Index(helpLine, "? for help")
-			
-			assert.True(t, enterIndex != -1, "Help text should contain 'enter to attach'")  
+
+			assert.True(t, enterIndex != -1, "Help text should contain 'enter to attach'")
 			assert.True(t, questionIndex != -1, "Help text should contain '? for help'")
 			assert.True(t, enterIndex < questionIndex, "'enter to attach' should appear before '? for help'")
 		}
@@ -114,7 +114,7 @@ func TestModel_HelpText(t *testing.T) {
 		// Assert - Check comma-separated format matches issueselect.go pattern
 		helpTextStart := strings.Index(view, "Press ")
 		require.True(t, helpTextStart != -1, "Help text should start with 'Press '")
-		
+
 		helpLine := view[helpTextStart:]
 		newlineIndex := strings.Index(helpLine, "\n")
 		if newlineIndex != -1 {
@@ -123,14 +123,14 @@ func TestModel_HelpText(t *testing.T) {
 
 		// Check for proper comma separation
 		assert.Contains(t, helpLine, ", ", "Help text should use comma separation")
-		
+
 		// Check for expected components in correct order
 		expectedOrder := []string{"enter to attach", "? for help", "g to toggle", "r to refresh", "q to quit"}
 		lastIndex := -1
 		for _, component := range expectedOrder {
 			currentIndex := strings.Index(helpLine, component)
 			if currentIndex != -1 {
-				assert.True(t, currentIndex > lastIndex, 
+				assert.True(t, currentIndex > lastIndex,
 					"Components should appear in expected order: %v", expectedOrder)
 				lastIndex = currentIndex
 			}
@@ -153,18 +153,18 @@ func TestModel_HelpText(t *testing.T) {
 		// Assert - Verify "enter to attach" appears at the beginning for prominence
 		helpTextStart := strings.Index(view, "Press ")
 		require.True(t, helpTextStart != -1, "Help text should start with 'Press '")
-		
+
 		helpLine := view[helpTextStart:]
-		
+
 		// Check that "enter to attach" comes immediately after "Press "
 		expectedStart := "Press enter to attach"
-		assert.True(t, strings.HasPrefix(helpLine, expectedStart), 
+		assert.True(t, strings.HasPrefix(helpLine, expectedStart),
 			"Help text should start with 'Press enter to attach', got: %s", helpLine[:minValue(len(helpLine), 30)])
 	})
 
 	t.Run("help_text_length_within_terminal_limits", func(t *testing.T) {
 		testWidths := []int{80, 120, 160}
-		
+
 		for _, width := range testWidths {
 			t.Run(fmt.Sprintf("width_%d", width), func(t *testing.T) {
 				// Arrange
@@ -185,8 +185,8 @@ func TestModel_HelpText(t *testing.T) {
 					if strings.Contains(line, "Press ") {
 						// Remove ANSI codes and measure actual text length
 						cleanLine := stripANSI(line)
-						assert.LessOrEqual(t, len(cleanLine), width, 
-							"Help text should fit within terminal width %d, got length %d: %s", 
+						assert.LessOrEqual(t, len(cleanLine), width,
+							"Help text should fit within terminal width %d, got length %d: %s",
 							width, len(cleanLine), cleanLine)
 					}
 				}
