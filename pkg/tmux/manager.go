@@ -181,11 +181,22 @@ func (m *Manager) StartWorkIssue(sessionName string, issueNumber int, workIssueS
 
 // ExecuteCommand executes a flexible command in the tmux session
 func (m *Manager) ExecuteCommand(sessionName, command string, args []string) error {
+	return m.ExecuteCommandWithSubstitution(sessionName, command, args, nil)
+}
+
+// ExecuteCommandWithSubstitution executes a command with parameter substitution
+func (m *Manager) ExecuteCommandWithSubstitution(sessionName, command string, args []string, substitutions map[string]string) error {
 	// Build the full command string
 	var fullCommand string
 	if len(args) > 0 {
-		// Use command + args
-		cmdParts := append([]string{command}, args...)
+		// Apply substitutions to args if provided
+		processedArgs := make([]string, len(args))
+		for i, arg := range args {
+			processedArgs[i] = m.substituteParameters(arg, substitutions)
+		}
+
+		// Use command + processed args
+		cmdParts := append([]string{command}, processedArgs...)
 		fullCommand = strings.Join(cmdParts, " ")
 	} else {
 		fullCommand = command
@@ -199,6 +210,19 @@ func (m *Manager) ExecuteCommand(sessionName, command string, args []string) err
 	}
 
 	return nil
+}
+
+// substituteParameters replaces parameter placeholders in a string
+func (m *Manager) substituteParameters(input string, substitutions map[string]string) string {
+	if substitutions == nil {
+		return input
+	}
+
+	result := input
+	for placeholder, value := range substitutions {
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+	return result
 }
 
 func (m *Manager) setWorkingDirectory(sessionName, workingDir string) error {

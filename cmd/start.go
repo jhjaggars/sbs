@@ -202,7 +202,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 		} else if repoConfig.TmuxCommand != "" {
 			// Repository config specifies custom command
 			fmt.Printf("Executing repository command in session: %s\n", repoConfig.TmuxCommand)
-			if err := tmuxManager.ExecuteCommand(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs); err != nil {
+
+			// Create substitution map for parameters
+			substitutions := map[string]string{
+				"$1": fmt.Sprintf("%d", issueNumber),
+			}
+
+			if err := tmuxManager.ExecuteCommandWithSubstitution(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs, substitutions); err != nil {
 				fmt.Printf("Warning: Failed to execute repository command: %v\n", err)
 			}
 		} else {
