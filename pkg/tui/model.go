@@ -244,9 +244,9 @@ func (m Model) View() string {
 	if m.showHelp {
 		b.WriteString("\n" + m.helpView())
 	} else {
-		helpText := "\nPress ? for help, g to toggle view, r to refresh, q to quit"
+		helpText := "\nPress enter to attach, ? for help, g to toggle view, r to refresh, q to quit"
 		if m.currentRepo == nil && m.viewMode == ViewModeRepository {
-			helpText = "\nNot in git repository - showing global view. Press ? for help, r to refresh, q to quit"
+			helpText = "\nNot in git repository - showing global view. Press enter to attach, ? for help, r to refresh, q to quit"
 		}
 		b.WriteString(helpStyle.Render(helpText))
 	}
