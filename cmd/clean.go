@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -134,8 +133,8 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	// Save updated sessions back to their respective locations
-	if err := saveSessionsToTheirRepositories(activeSessions); err != nil {
+	// Save updated sessions back to global location
+	if err := config.SaveSessions(activeSessions); err != nil {
 		fmt.Printf("Warning: failed to save updated sessions: %v\n", err)
 	}
 	
@@ -154,38 +153,3 @@ func removeWorktreeDirectory(worktreePath string) error {
 	return os.RemoveAll(worktreePath)
 }
 
-// saveSessionsToTheirRepositories saves sessions back to their appropriate locations
-func saveSessionsToTheirRepositories(sessions []config.SessionMetadata) error {
-	// Group sessions by repository
-	sessionsByRepo := make(map[string][]config.SessionMetadata)
-	var globalSessions []config.SessionMetadata
-	
-	for _, session := range sessions {
-		if session.RepositoryRoot != "" {
-			// Repository-specific session
-			key := session.RepositoryRoot
-			sessionsByRepo[key] = append(sessionsByRepo[key], session)
-		} else {
-			// Global session (backward compatibility)
-			globalSessions = append(globalSessions, session)
-		}
-	}
-	
-	// Save global sessions
-	if len(globalSessions) > 0 {
-		if err := config.SaveSessions(globalSessions); err != nil {
-			return err
-		}
-	}
-	
-	// Save repository-specific sessions
-	for repoRoot, repoSessions := range sessionsByRepo {
-		sessionsPath := filepath.Join(repoRoot, ".sbs", "sessions.json")
-		if err := config.SaveSessionsToPath(repoSessions, sessionsPath); err != nil {
-			// Don't fail completely if one repository fails
-			fmt.Printf("Warning: failed to save sessions for repository %s: %v\n", repoRoot, err)
-		}
-	}
-	
-	return nil
-}

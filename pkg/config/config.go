@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type Config struct {
@@ -145,102 +144,10 @@ func SaveSessions(sessions []SessionMetadata) error {
 	return SaveSessionsToPath(sessions, sessionsPath)
 }
 
-// LoadAllRepositorySessions loads sessions from all known repositories
+// LoadAllRepositorySessions loads sessions from the global sessions file
 func LoadAllRepositorySessions() ([]SessionMetadata, error) {
-	var allSessions []SessionMetadata
-	
-	// Load global sessions first (for backward compatibility)
-	globalSessions, err := LoadSessions()
-	if err == nil {
-		allSessions = append(allSessions, globalSessions...)
-	}
-	
-	// Discover and load repository-specific sessions
-	repoSessions, err := discoverRepositorySessions()
-	if err == nil {
-		allSessions = append(allSessions, repoSessions...)
-	}
-	
-	return allSessions, nil
+	// Use only the global sessions file as the single source of truth
+	// Repository scoping is handled by filtering based on RepositoryRoot field
+	return LoadSessions()
 }
 
-// discoverRepositorySessions finds and loads sessions from repository-specific locations
-func discoverRepositorySessions() ([]SessionMetadata, error) {
-	var allSessions []SessionMetadata
-	
-	// Get common workspace directories to search
-	searchPaths := getWorkspaceSearchPaths()
-	
-	for _, basePath := range searchPaths {
-		sessions, err := scanForSessionFiles(basePath)
-		if err == nil {
-			allSessions = append(allSessions, sessions...)
-		}
-	}
-	
-	return allSessions, nil
-}
-
-// getWorkspaceSearchPaths returns common directories where repositories might be located
-func getWorkspaceSearchPaths() []string {
-	homeDir, _ := os.UserHomeDir()
-	
-	// Common workspace locations
-	searchPaths := []string{
-		filepath.Join(homeDir, "code"),
-		filepath.Join(homeDir, "projects"),
-		filepath.Join(homeDir, "workspace"),
-		filepath.Join(homeDir, "dev"),
-		filepath.Join(homeDir, "src"),
-		filepath.Join(homeDir, "git"),
-		homeDir, // Also search home directory itself
-	}
-	
-	// Add current working directory and its parent
-	if cwd, err := os.Getwd(); err == nil {
-		searchPaths = append(searchPaths, cwd)
-		searchPaths = append(searchPaths, filepath.Dir(cwd))
-	}
-	
-	return searchPaths
-}
-
-// scanForSessionFiles recursively searches for .sbs/sessions.json files
-func scanForSessionFiles(basePath string) ([]SessionMetadata, error) {
-	var allSessions []SessionMetadata
-	
-	// Check if base path exists
-	if _, err := os.Stat(basePath); os.IsNotExist(err) {
-		return allSessions, nil
-	}
-	
-	// Walk through directories looking for .sbs/sessions.json
-	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Continue walking even if there are permission errors
-		}
-		
-		// Skip hidden directories (except .sbs itself)
-		if info.IsDir() && strings.HasPrefix(info.Name(), ".") && info.Name() != ".sbs" {
-			return filepath.SkipDir
-		}
-		
-		// Look for sessions.json files in .sbs directories
-		if info.Name() == "sessions.json" && strings.HasSuffix(filepath.Dir(path), ".sbs") {
-			sessions, err := LoadSessionsFromPath(path)
-			if err == nil {
-				allSessions = append(allSessions, sessions...)
-			}
-		}
-		
-		// Limit recursion depth to avoid scanning too deep
-		depth := strings.Count(strings.TrimPrefix(path, basePath), string(os.PathSeparator))
-		if depth > 3 {
-			return filepath.SkipDir
-		}
-		
-		return nil
-	})
-	
-	return allSessions, err
-}

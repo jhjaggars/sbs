@@ -55,9 +55,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 	tmuxManager := tmux.NewManager()
 	issueTracker := issue.NewTracker(cfg)
 	
-	// Load repository-specific sessions
-	sessionsPath := currentRepo.GetSessionsPath()
-	sessions, err := config.LoadSessionsFromPath(sessionsPath)
+	// Load global sessions
+	sessions, err := config.LoadSessions()
 	if err != nil {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
@@ -137,8 +136,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		sessions = append(sessions, *sessionMetadata)
 	}
 	
-	// Save updated sessions to repository-specific location
-	if err := config.SaveSessionsToPath(sessions, sessionsPath); err != nil {
+	// Save updated sessions to global location
+	if err := config.SaveSessions(sessions); err != nil {
 		return fmt.Errorf("failed to save sessions: %w", err)
 	}
 	
