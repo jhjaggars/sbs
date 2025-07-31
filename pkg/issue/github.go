@@ -57,12 +57,12 @@ func (g *GitHubClient) GetIssue(issueNumber int) (*Issue, error) {
 		}
 		return nil, fmt.Errorf("failed to fetch issue #%d with gh command: %w", issueNumber, err)
 	}
-	
+
 	var ghIssue ghIssueJSON
 	if err := json.Unmarshal(output, &ghIssue); err != nil {
 		return nil, fmt.Errorf("failed to parse gh command output: %w", err)
 	}
-	
+
 	return &Issue{
 		Number: ghIssue.Number,
 		Title:  ghIssue.Title,
@@ -75,12 +75,12 @@ func (g *GitHubClient) GetIssue(issueNumber int) (*Issue, error) {
 func (g *GitHubClient) ListIssues(searchQuery string, limit int) ([]Issue, error) {
 	// Build gh command arguments
 	args := []string{"issue", "list", "--json", "number,title,state,url", "--state", "open", "--limit", strconv.Itoa(limit)}
-	
+
 	// Add search query if provided
 	if searchQuery != "" {
 		args = append(args, "--search", searchQuery)
 	}
-	
+
 	// Execute gh command
 	output, err := g.executor.executeCommand("gh", args...)
 	if err != nil {
@@ -88,23 +88,23 @@ func (g *GitHubClient) ListIssues(searchQuery string, limit int) ([]Issue, error
 		if execErr, ok := err.(*exec.Error); ok && execErr.Err == exec.ErrNotFound {
 			return nil, fmt.Errorf("gh command not found. Please install GitHub CLI: https://cli.github.com/")
 		}
-		
+
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := string(exitErr.Stderr)
 			if strings.Contains(stderr, "gh auth login") {
 				return nil, fmt.Errorf("GitHub CLI authentication required. Please run: gh auth login")
 			}
 		}
-		
+
 		return nil, fmt.Errorf("failed to list issues with gh command: %w", err)
 	}
-	
+
 	// Parse JSON response
 	var ghIssues []ghIssueJSON
 	if err := json.Unmarshal(output, &ghIssues); err != nil {
 		return nil, fmt.Errorf("failed to parse gh command output: %w", err)
 	}
-	
+
 	// Convert to Issue structs
 	issues := make([]Issue, len(ghIssues))
 	for i, ghIssue := range ghIssues {
@@ -115,7 +115,7 @@ func (g *GitHubClient) ListIssues(searchQuery string, limit int) ([]Issue, error
 			URL:    ghIssue.URL,
 		}
 	}
-	
+
 	return issues, nil
 }
 
@@ -134,6 +134,6 @@ func ParseIssueNumber(input string) (int, error) {
 	if input[0] == '#' {
 		input = input[1:]
 	}
-	
+
 	return strconv.Atoi(input)
 }

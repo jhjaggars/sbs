@@ -30,20 +30,19 @@ func (m *Manager) DetectCurrentRepository() (*Repository, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository: %w", err)
 	}
-	
+
 	// Extract repository name
 	repoName := m.extractRepositoryName(repoRoot)
-	
+
 	// Get remote URL if available
 	remoteURL := m.getRemoteURL(repoRoot)
-	
+
 	return &Repository{
 		Name:   repoName,
 		Root:   repoRoot,
 		Remote: remoteURL,
 	}, nil
 }
-
 
 // GetTmuxSessionName returns the repository-scoped tmux session name
 func (r *Repository) GetTmuxSessionName(issueNumber int) string {
@@ -67,7 +66,7 @@ func (m *Manager) findGitRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Use go-git to find repository root
 	repo, err := git.PlainOpenWithOptions(currentDir, &git.PlainOpenOptions{
 		DetectDotGit: true,
@@ -75,12 +74,12 @@ func (m *Manager) findGitRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	workTree, err := repo.Worktree()
 	if err != nil {
 		return "", err
 	}
-	
+
 	return workTree.Filesystem.Root(), nil
 }
 
@@ -90,7 +89,7 @@ func (m *Manager) extractRepositoryName(repoRoot string) string {
 	if remoteName := m.extractNameFromRemote(repoRoot); remoteName != "" {
 		return remoteName
 	}
-	
+
 	// Fallback to directory name
 	return filepath.Base(repoRoot)
 }
@@ -103,19 +102,19 @@ func (m *Manager) extractNameFromRemote(repoRoot string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	remoteURL := strings.TrimSpace(string(output))
-	
+
 	// Handle different URL formats
 	// SSH: git@github.com:user/repo.git
 	// HTTPS: https://github.com/user/repo.git
-	
+
 	// Extract repository name from URL
 	patterns := []string{
 		`[:/]([^/]+)/([^/]+?)(?:\.git)?$`, // Captures user/repo
-		`/([^/]+?)(?:\.git)?$`,           // Just repo name
+		`/([^/]+?)(?:\.git)?$`,            // Just repo name
 	}
-	
+
 	for _, pattern := range patterns {
 		re := regexp.MustCompile(pattern)
 		matches := re.FindStringSubmatch(remoteURL)
@@ -124,7 +123,7 @@ func (m *Manager) extractNameFromRemote(repoRoot string) string {
 			return matches[len(matches)-1]
 		}
 	}
-	
+
 	return ""
 }
 
@@ -136,7 +135,7 @@ func (m *Manager) getRemoteURL(repoRoot string) string {
 	if err != nil {
 		return ""
 	}
-	
+
 	return strings.TrimSpace(string(output))
 }
 
@@ -151,18 +150,18 @@ func (m *Manager) SanitizeName(name string) string {
 	// Remove special characters and replace with hyphens
 	reg := regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	sanitized := reg.ReplaceAllString(name, "-")
-	
+
 	// Trim hyphens from start and end
 	sanitized = strings.Trim(sanitized, "-")
-	
+
 	// Convert to lowercase
 	sanitized = strings.ToLower(sanitized)
-	
+
 	// Limit length
 	if len(sanitized) > 30 {
 		sanitized = sanitized[:30]
 		sanitized = strings.TrimSuffix(sanitized, "-")
 	}
-	
+
 	return sanitized
 }

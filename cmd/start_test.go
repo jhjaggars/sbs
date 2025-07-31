@@ -24,13 +24,13 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		// Act & Assert
 		cmd.SetArgs([]string{"123"})
 		err := cmd.Execute()
 		require.NoError(t, err)
 	})
-	
+
 	t.Run("without_arguments", func(t *testing.T) {
 		// Arrange
 		cmd := &cobra.Command{
@@ -46,13 +46,13 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		// Act & Assert
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.NoError(t, err)
 	})
-	
+
 	t.Run("with_resume_flag", func(t *testing.T) {
 		// Arrange
 		cmd := &cobra.Command{
@@ -66,13 +66,13 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 			},
 		}
 		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
-		
+
 		// Act & Assert
 		cmd.SetArgs([]string{"--resume", "123"})
 		err := cmd.Execute()
 		require.NoError(t, err)
 	})
-	
+
 	t.Run("invalid_issue_number", func(t *testing.T) {
 		// This test would be handled in the actual runStart function
 		// We're testing that non-numeric values can be passed through cobra validation
@@ -87,13 +87,13 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		// Act & Assert
 		cmd.SetArgs([]string{"invalid"})
 		err := cmd.Execute()
 		require.NoError(t, err)
 	})
-	
+
 	t.Run("too_many_arguments", func(t *testing.T) {
 		// Arrange
 		cmd := &cobra.Command{
@@ -104,7 +104,7 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		// Act & Assert
 		cmd.SetArgs([]string{"123", "456"})
 		err := cmd.Execute()
@@ -118,18 +118,18 @@ func TestStartCommand_Structure(t *testing.T) {
 	t.Run("command_has_correct_usage", func(t *testing.T) {
 		// The actual startCmd should have the correct usage string
 		expectedUsage := "start [issue-number]"
-		
+
 		// This would test the actual command, but since we need to avoid
 		// side effects in tests, we'll test the pattern
 		assert.Contains(t, expectedUsage, "[issue-number]")
 		assert.Contains(t, expectedUsage, "start")
 	})
-	
+
 	t.Run("command_accepts_resume_flag", func(t *testing.T) {
 		// Test that the resume flag is properly configured
 		cmd := &cobra.Command{}
 		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
-		
+
 		// Test flag exists
 		flag := cmd.Flags().Lookup("resume")
 		require.NotNil(t, flag)

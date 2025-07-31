@@ -29,7 +29,7 @@ func Execute() error {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	
+
 	// Global flags
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is ~/.config/sbs/config.json)")
 }
@@ -41,7 +41,7 @@ func initConfig() {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
-	
+
 	// Validate required tools are available
 	if err := validation.CheckRequiredTools(); err != nil {
 		fmt.Printf("Tool validation failed:\n%v", err)

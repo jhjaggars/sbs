@@ -20,20 +20,20 @@ type GitHubClientInterface interface {
 type IssueSelectModel struct {
 	// Dependencies
 	githubClient GitHubClientInterface
-	
+
 	// State
-	issues         []issue.Issue      // Current list of issues
-	filteredIssues []issue.Issue      // Filtered issues based on search
-	cursor         int                // Currently selected issue index
-	searchInput    textinput.Model    // Search input field
-	searchFocused  bool               // Whether search input is focused
-	showHelp       bool               // Whether to show help text
-	width          int                // Terminal width
-	height         int                // Terminal height
-	state          issueSelectState   // Current UI state
-	err            error              // Current error, if any
-	selectedIssue  *issue.Issue       // Selected issue (when state is stateSelected)
-	
+	issues         []issue.Issue    // Current list of issues
+	filteredIssues []issue.Issue    // Filtered issues based on search
+	cursor         int              // Currently selected issue index
+	searchInput    textinput.Model  // Search input field
+	searchFocused  bool             // Whether search input is focused
+	showHelp       bool             // Whether to show help text
+	width          int              // Terminal width
+	height         int              // Terminal height
+	state          issueSelectState // Current UI state
+	err            error            // Current error, if any
+	selectedIssue  *issue.Issue     // Selected issue (when state is stateSelected)
+
 	// Configuration
 	issueLimit int // Maximum number of issues to fetch
 }
@@ -109,7 +109,7 @@ func (m *IssueSelectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = stateReady
 			m.issues = msg.issues
 			m.filteredIssues = msg.issues // Initially, all issues are shown
-			m.cursor = 0 // Reset cursor when issues are loaded
+			m.cursor = 0                  // Reset cursor when issues are loaded
 		}
 		return m, nil
 
@@ -305,7 +305,7 @@ func (m *IssueSelectModel) readyView() string {
 			if i >= len(m.filteredIssues) {
 				break
 			}
-			
+
 			issue := m.filteredIssues[i]
 			title := TruncateString(issue.Title, 58)
 			row := fmt.Sprintf("%-8d %-60s", issue.Number, title)
@@ -322,7 +322,7 @@ func (m *IssueSelectModel) readyView() string {
 
 		// Show pagination info if needed
 		if len(m.filteredIssues) > m.getMaxVisibleIssues() {
-			paginationInfo := fmt.Sprintf("Showing %d-%d of %d issues", 
+			paginationInfo := fmt.Sprintf("Showing %d-%d of %d issues",
 				visibleStart+1, min(visibleEnd, len(m.filteredIssues)), len(m.filteredIssues))
 			b.WriteString("\n" + mutedStyle.Render(paginationInfo) + "\n")
 		}
@@ -371,7 +371,7 @@ func (m *IssueSelectModel) getVisibleRange() (int, int) {
 	if start < 0 {
 		start = 0
 	}
-	
+
 	end := start + maxVisible
 	if end > totalIssues {
 		end = totalIssues
@@ -388,12 +388,12 @@ func (m *IssueSelectModel) getMaxVisibleIssues() int {
 	if m.showHelp {
 		reservedLines += 10 // Additional space for help text
 	}
-	
+
 	availableLines := m.height - reservedLines
 	if availableLines < 1 {
 		return 1 // Always show at least one issue
 	}
-	
+
 	return availableLines
 }
 

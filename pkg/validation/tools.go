@@ -11,27 +11,27 @@ import (
 // CheckRequiredTools validates that all required external tools are available
 func CheckRequiredTools() error {
 	var errors []string
-	
+
 	// Check tmux
 	if err := checkTmux(); err != nil {
 		errors = append(errors, err.Error())
 	}
-	
+
 	// Check git
 	if err := checkGit(); err != nil {
 		errors = append(errors, err.Error())
 	}
-	
+
 	// Check gh (GitHub CLI)
 	if err := issue.CheckGHInstalled(); err != nil {
 		errors = append(errors, err.Error())
 	}
-	
+
 	// Check sandbox
 	if err := sandbox.CheckSandboxInstalled(); err != nil {
 		errors = append(errors, err.Error())
 	}
-	
+
 	if len(errors) > 0 {
 		errorMsg := "Missing required tools:\n"
 		for _, err := range errors {
@@ -39,7 +39,7 @@ func CheckRequiredTools() error {
 		}
 		return fmt.Errorf("%s", errorMsg)
 	}
-	
+
 	return nil
 }
 

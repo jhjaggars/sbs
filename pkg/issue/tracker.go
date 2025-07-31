@@ -15,7 +15,7 @@ type Tracker struct {
 
 func NewTracker(cfg *config.Config) *Tracker {
 	githubClient := NewGitHubClient()
-	
+
 	return &Tracker{
 		githubClient: githubClient,
 		config:       cfg,
@@ -28,7 +28,7 @@ func (t *Tracker) GetIssue(issueNumber int) (*Issue, error) {
 
 func (t *Tracker) CreateSessionMetadata(issueNumber int, issue *Issue, branch, worktreePath, tmuxSession, sandboxName, repoName, repoRoot string) *config.SessionMetadata {
 	now := time.Now().Format(time.RFC3339)
-	
+
 	return &config.SessionMetadata{
 		IssueNumber:    issueNumber,
 		IssueTitle:     issue.Title,
@@ -46,14 +46,14 @@ func (t *Tracker) CreateSessionMetadata(issueNumber int, issue *Issue, branch, w
 
 func (t *Tracker) UpdateSessionActivity(sessions []config.SessionMetadata, issueNumber int) []config.SessionMetadata {
 	now := time.Now().Format(time.RFC3339)
-	
+
 	for i, session := range sessions {
 		if session.IssueNumber == issueNumber {
 			sessions[i].LastActivity = now
 			break
 		}
 	}
-	
+
 	return sessions
 }
 
@@ -72,12 +72,12 @@ func (t *Tracker) FindSessionByIssue(sessions []config.SessionMetadata, issueNum
 
 func (t *Tracker) RemoveSession(sessions []config.SessionMetadata, issueNumber int) []config.SessionMetadata {
 	var filtered []config.SessionMetadata
-	
+
 	for _, session := range sessions {
 		if session.IssueNumber != issueNumber {
 			filtered = append(filtered, session)
 		}
 	}
-	
+
 	return filtered
 }

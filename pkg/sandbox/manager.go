@@ -33,7 +33,7 @@ func (m *Manager) SandboxExists(sandboxName string) (bool, error) {
 		}
 		return false, fmt.Errorf("failed to list sandboxes: %w", err)
 	}
-	
+
 	// Check if sandbox name appears in output
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
@@ -41,7 +41,7 @@ func (m *Manager) SandboxExists(sandboxName string) (bool, error) {
 			return true, nil
 		}
 	}
-	
+
 	return false, nil
 }
 
@@ -52,17 +52,17 @@ func (m *Manager) DeleteSandbox(sandboxName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to check if sandbox exists: %w", err)
 	}
-	
+
 	if !exists {
 		// Sandbox doesn't exist, nothing to do
 		return nil
 	}
-	
+
 	cmd := exec.Command("sandbox", "delete", sandboxName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to delete sandbox %s: %w", sandboxName, err)
 	}
-	
+
 	return nil
 }
 
@@ -77,7 +77,7 @@ func (m *Manager) ListSandboxes() ([]string, error) {
 		}
 		return nil, fmt.Errorf("failed to list sandboxes: %w", err)
 	}
-	
+
 	var workIssueSandboxes []string
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
@@ -90,7 +90,7 @@ func (m *Manager) ListSandboxes() ([]string, error) {
 			}
 		}
 	}
-	
+
 	return workIssueSandboxes, nil
 }
 

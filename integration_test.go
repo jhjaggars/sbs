@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package main
@@ -22,7 +23,7 @@ func TestInteractiveIssueSelection(t *testing.T) {
 	t.Run("github_client_and_tui_integration", func(t *testing.T) {
 		// This test verifies that the GitHub client can be used with the TUI
 		// without actually calling GitHub API (uses mock)
-		
+
 		// Create a mock client that implements the interface
 		mockClient := &mockGitHubClientIntegration{
 			issues: []issue.Issue{
@@ -30,25 +31,25 @@ func TestInteractiveIssueSelection(t *testing.T) {
 				{Number: 2, Title: "Integration test issue 2", State: "open", URL: "https://github.com/test/repo/issues/2"},
 			},
 		}
-		
+
 		// Create TUI model with mock client
 		model := tui.NewIssueSelectModel(mockClient)
-		
+
 		// Verify the model can be initialized
 		assert.NotNil(t, model)
-		
+
 		// Verify the model can handle issue loading
 		cmd := model.Init()
 		assert.NotNil(t, cmd)
-		
+
 		// The integration test stops here since we can't easily test
 		// the full TUI interaction without a terminal
 	})
-	
+
 	t.Run("command_structure_integration", func(t *testing.T) {
 		// Test that the command can be imported and has the right structure
 		// This verifies that all dependencies are properly wired
-		
+
 		// This would test actual command execution but we skip that
 		// to avoid side effects in tests
 		t.Log("Command structure integration test - would test actual execution")
@@ -61,15 +62,15 @@ func TestGitHubClientRealIntegration(t *testing.T) {
 	if os.Getenv("INTEGRATION_TESTS") == "" {
 		t.Skip("Skipping integration test - set INTEGRATION_TESTS=1 to run")
 	}
-	
+
 	t.Run("real_github_client_if_available", func(t *testing.T) {
 		// Test with real GitHub client if gh is available
 		client := issue.NewGitHubClient()
-		
+
 		// Try to list issues - this will fail if not in a GitHub repo
 		// or if gh is not authenticated, but that's expected
 		issues, err := client.ListIssues("", 5)
-		
+
 		if err != nil {
 			// Expected if not in a GitHub repo or not authenticated
 			t.Logf("GitHub client error (expected in most test environments): %v", err)
@@ -99,25 +100,25 @@ func TestDirectoryStructure(t *testing.T) {
 			"pkg/issue/github.go",
 			"pkg/tui/issueselect.go",
 		}
-		
+
 		for _, file := range requiredFiles {
 			_, err := os.Stat(file)
 			require.NoError(t, err, "Required file %s should exist", file)
 		}
-		
+
 		// Verify test files exist
 		testFiles := []string{
 			"pkg/issue/github_test.go",
 			"pkg/tui/issueselect_test.go",
 			"cmd/start_test.go",
 		}
-		
+
 		for _, file := range testFiles {
 			_, err := os.Stat(file)
 			require.NoError(t, err, "Test file %s should exist", file)
 		}
 	})
-	
+
 	t.Run("verify_build_artifacts", func(t *testing.T) {
 		// Check if build produces expected binary
 		_, err := os.Stat("sbs")
@@ -125,7 +126,7 @@ func TestDirectoryStructure(t *testing.T) {
 			// Binary exists, check if it's executable
 			info, err := os.Stat("sbs")
 			require.NoError(t, err)
-			
+
 			mode := info.Mode()
 			assert.True(t, mode&0111 != 0, "Binary should be executable")
 		} else {

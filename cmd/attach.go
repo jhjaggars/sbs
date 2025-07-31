@@ -29,38 +29,38 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
 	}
-	
+
 	// Load sessions
 	sessions, err := config.LoadSessions()
 	if err != nil {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
-	
+
 	// Find session
 	issueTracker := issue.NewTracker(cfg)
 	session := issueTracker.FindSessionByIssue(sessions, issueNumber)
 	if session == nil {
 		return fmt.Errorf("no session found for issue #%d", issueNumber)
 	}
-	
+
 	// Check if tmux session exists
 	tmuxManager := tmux.NewManager()
 	exists, err := tmuxManager.SessionExists(session.TmuxSession)
 	if err != nil {
 		return fmt.Errorf("failed to check tmux session: %w", err)
 	}
-	
+
 	if !exists {
 		return fmt.Errorf("tmux session %s does not exist", session.TmuxSession)
 	}
-	
+
 	// Update last activity
 	sessions = issueTracker.UpdateSessionActivity(sessions, issueNumber)
 	if err := config.SaveSessions(sessions); err != nil {
 		// Don't fail if we can't save - just log
 		fmt.Printf("Warning: failed to update session activity: %v\n", err)
 	}
-	
+
 	fmt.Printf("Attaching to session for issue #%d...\n", issueNumber)
 	return tmuxManager.AttachToSession(session.TmuxSession)
 }
