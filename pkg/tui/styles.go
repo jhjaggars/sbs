@@ -252,3 +252,52 @@ func FormatGlobalViewHeader(widths ColumnWidths) string {
 		widths.LastActivity, "Last Activity",
 	)
 }
+
+// CalculateIssueSelectWidths calculates column widths for issue selection view (Issue + Title only)
+func CalculateIssueSelectWidths(terminalWidth int) ColumnWidths {
+	// Account for padding and spacing between columns (roughly 3 spaces for 2 columns)
+	availableWidth := terminalWidth - 3
+
+	// Minimum widths for readability
+	const (
+		minIssue = 8
+		minTitle = 20
+	)
+
+	// Start with minimum widths
+	widths := ColumnWidths{
+		Issue: minIssue,
+		Title: minTitle,
+	}
+
+	usedWidth := minIssue + minTitle
+
+	// If we have extra space, give it all to the title column
+	if availableWidth > usedWidth {
+		extraSpace := availableWidth - usedWidth
+		widths.Title += extraSpace
+
+		// Cap title width at reasonable maximum to prevent overly long lines
+		if widths.Title > 100 {
+			widths.Title = 100
+		}
+	}
+
+	return widths
+}
+
+// FormatIssueSelectRow formats a row for issue selection view with given column widths
+func FormatIssueSelectRow(widths ColumnWidths, issue int, title string) string {
+	return fmt.Sprintf("%-*d %-*s",
+		widths.Issue, issue,
+		widths.Title, TruncateString(title, widths.Title),
+	)
+}
+
+// FormatIssueSelectHeader formats the header for issue selection view with given column widths
+func FormatIssueSelectHeader(widths ColumnWidths) string {
+	return fmt.Sprintf("%-*s %-*s",
+		widths.Issue, "Issue",
+		widths.Title, "Title",
+	)
+}

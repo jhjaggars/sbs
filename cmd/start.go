@@ -39,12 +39,14 @@ func init() {
 	startCmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
 	startCmd.Flags().String("command", "", "Custom command to run in tmux session")
 	startCmd.Flags().Bool("no-command", false, "Start session without executing any command")
+	startCmd.Flags().BoolP("verbose", "v", false, "Enable verbose debug output")
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
 	resume, _ := cmd.Flags().GetBool("resume")
 	customCommand, _ := cmd.Flags().GetString("command")
 	noCommand, _ := cmd.Flags().GetBool("no-command")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	// Initialize repository context first (required for both modes)
 	repoManager := repo.NewManager()
@@ -144,6 +146,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Create worktree using repository-aware path
 	worktreePath := currentRepo.GetWorktreePath(issueNumber)
+	if verbose {
+		fmt.Printf("Debug: Creating worktree at path: %s\n", worktreePath)
+		fmt.Printf("Debug: Using branch: %s\n", branch)
+		fmt.Printf("Debug: Repository root: %s\n", currentRepo.Root)
+	}
+
 	if err := gitManager.CreateWorktree(branch, worktreePath); err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}

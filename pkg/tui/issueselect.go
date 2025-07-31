@@ -295,8 +295,12 @@ func (m *IssueSelectModel) readyView() string {
 			b.WriteString(mutedStyle.Render("No open issues found in this repository.") + "\n")
 		}
 	} else {
+		// Calculate responsive column widths based on terminal width
+		// Use a simplified two-column layout for issue selection (Issue + Title only)
+		widths := CalculateIssueSelectWidths(m.width)
+
 		// Table header
-		headerRow := fmt.Sprintf("%-8s %-60s", "Issue", "Title")
+		headerRow := FormatIssueSelectHeader(widths)
 		b.WriteString(tableHeaderStyle.Render(headerRow) + "\n")
 
 		// Issue rows
@@ -307,8 +311,7 @@ func (m *IssueSelectModel) readyView() string {
 			}
 
 			issue := m.filteredIssues[i]
-			title := TruncateString(issue.Title, 58)
-			row := fmt.Sprintf("%-8d %-60s", issue.Number, title)
+			row := FormatIssueSelectRow(widths, issue.Number, issue.Title)
 
 			// Apply selection style
 			if i == m.cursor {

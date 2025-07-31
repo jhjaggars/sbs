@@ -73,8 +73,9 @@ func (m *Manager) CreateIssueBranch(issueNumber int, issueTitle string) (string,
 
 func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 	// Ensure worktree directory exists
-	if err := os.MkdirAll(filepath.Dir(worktreePath), 0755); err != nil {
-		return fmt.Errorf("failed to create worktree parent directory: %w", err)
+	parentDir := filepath.Dir(worktreePath)
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
+		return fmt.Errorf("failed to create worktree parent directory %s: %w", parentDir, err)
 	}
 
 	// Check if worktree already exists
@@ -83,15 +84,32 @@ func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 		if m.isValidWorktree(worktreePath) {
 			return nil
 		}
-		// Remove invalid worktree
-		os.RemoveAll(worktreePath)
+
+		// Invalid worktree detected, remove it first
+		if err := m.cleanupInvalidWorktree(worktreePath); err != nil {
+			return fmt.Errorf("failed to cleanup invalid worktree at %s: %w", worktreePath, err)
+		}
+	}
+
+	// Verify branch exists before creating worktree
+	if !m.branchExists(branchName) {
+		return fmt.Errorf("branch %s does not exist", branchName)
 	}
 
 	// Use git command to create worktree (go-git doesn't support worktrees well)
 	cmd := exec.Command("git", "worktree", "add", worktreePath, branchName)
 	cmd.Dir = m.repoPath
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create worktree: %w", err)
+
+	// Capture both stdout and stderr for better error reporting
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create worktree at %s for branch %s: %w\nGit output: %s",
+			worktreePath, branchName, err, string(output))
+	}
+
+	// Final validation that worktree was created successfully
+	if !m.isValidWorktree(worktreePath) {
+		return fmt.Errorf("worktree created but validation failed at %s", worktreePath)
 	}
 
 	return nil
@@ -131,9 +149,40 @@ func (m *Manager) ListWorktrees() ([]string, error) {
 }
 
 func (m *Manager) isValidWorktree(path string) bool {
-	gitDir := filepath.Join(path, ".git")
-	_, err := os.Stat(gitDir)
-	return err == nil
+	// Check if the directory exists
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+
+	// Check if .git file/directory exists
+	gitPath := filepath.Join(path, ".git")
+	gitStat, err := os.Stat(gitPath)
+	if err != nil {
+		return false
+	}
+
+	// For worktrees, .git is typically a file containing the path to the git directory
+	if !gitStat.IsDir() {
+		// Read .git file to verify it points to a valid git directory
+		content, err := os.ReadFile(gitPath)
+		if err != nil {
+			return false
+		}
+
+		// Content should be like "gitdir: /path/to/repo/.git/worktrees/name"
+		gitdirLine := strings.TrimSpace(string(content))
+		if !strings.HasPrefix(gitdirLine, "gitdir: ") {
+			return false
+		}
+
+		actualGitDir := strings.TrimPrefix(gitdirLine, "gitdir: ")
+		if _, err := os.Stat(actualGitDir); err != nil {
+			return false
+		}
+	}
+
+	// Additional check: verify this worktree is registered with git
+	return m.isWorktreeRegistered(path)
 }
 
 func (m *Manager) formatBranchName(issueNumber int, issueTitle string) string {
@@ -167,4 +216,68 @@ func (m *Manager) GetCurrentBranch() (string, error) {
 	}
 
 	return head.Name().Short(), nil
+}
+
+// branchExists checks if a branch exists in the repository
+func (m *Manager) branchExists(branchName string) bool {
+	branches, err := m.repo.Branches()
+	if err != nil {
+		return false
+	}
+
+	var exists bool
+	branches.ForEach(func(ref *plumbing.Reference) error {
+		if strings.HasSuffix(ref.Name().String(), branchName) {
+			exists = true
+		}
+		return nil
+	})
+
+	return exists
+}
+
+// isWorktreeRegistered verifies that the worktree is registered with git
+func (m *Manager) isWorktreeRegistered(worktreePath string) bool {
+	worktrees, err := m.ListWorktrees()
+	if err != nil {
+		return false
+	}
+
+	for _, wt := range worktrees {
+		if wt == worktreePath {
+			return true
+		}
+	}
+
+	return false
+}
+
+// cleanupInvalidWorktree removes an invalid worktree
+func (m *Manager) cleanupInvalidWorktree(worktreePath string) error {
+	// First try to remove via git worktree command
+	cmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
+	cmd.Dir = m.repoPath
+
+	// Capture output for debugging
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil // Successfully removed
+	}
+
+	// If git worktree remove failed, try manual cleanup
+	// First remove the directory
+	if err := os.RemoveAll(worktreePath); err != nil {
+		return fmt.Errorf("failed to remove worktree directory %s: %w (git output: %s)",
+			worktreePath, err, string(output))
+	}
+
+	// Then try to prune stale worktree references
+	pruneCmd := exec.Command("git", "worktree", "prune")
+	pruneCmd.Dir = m.repoPath
+	if err := pruneCmd.Run(); err != nil {
+		// Prune failure is not critical, just log it
+		return fmt.Errorf("worktree directory removed but failed to prune references: %w", err)
+	}
+
+	return nil
 }
