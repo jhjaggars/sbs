@@ -1,0 +1,20 @@
+{
+  "id": "sandbox-friendly-name",
+  "started": "2025-07-31T08:01:00Z",
+  "lastUpdated": "2025-07-31T08:01:00Z",
+  "status": "active",
+  "phase": "complete",
+  "progress": {
+    "discovery": { "answered": 5, "total": 5 },
+    "detail": { "answered": 5, "total": 5 }
+  },
+  "contextFiles": [
+    "pkg/tmux/manager.go",
+    "cmd/start.go", 
+    "cmd/attach.go",
+    "pkg/git/manager.go",
+    "pkg/repo/manager.go",
+    "pkg/config/config.go"
+  ],
+  "relatedFeatures": []
+}
