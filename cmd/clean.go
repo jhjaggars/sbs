@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
+	"sbs/pkg/repo"
 	"sbs/pkg/sandbox"
 	"sbs/pkg/tmux"
 )
@@ -23,6 +24,27 @@ func init() {
 	rootCmd.AddCommand(cleanCmd)
 	cleanCmd.Flags().BoolP("dry-run", "n", false, "Show what would be cleaned without actually doing it")
 	cleanCmd.Flags().BoolP("force", "f", false, "Force cleanup without confirmation")
+}
+
+// resolveSandboxName attempts to get the correct sandbox name for a session
+func resolveSandboxName(session config.SessionMetadata, sandboxManager *sandbox.Manager) string {
+	// If session has a stored sandbox name, use it
+	if session.SandboxName != "" {
+		return session.SandboxName
+	}
+
+	// Try to get repository-aware sandbox name if we have repository info
+	if session.RepositoryName != "" {
+		// Create a repository instance from session metadata
+		repository := &repo.Repository{
+			Name: session.RepositoryName,
+			Root: session.RepositoryRoot,
+		}
+		return repository.GetSandboxName(session.IssueNumber)
+	}
+
+	// Fall back to legacy sandbox naming for old sessions
+	return sandboxManager.GetSandboxName(session.IssueNumber)
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
@@ -74,10 +96,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Issue #%d: %s\n", session.IssueNumber, session.IssueTitle)
 		fmt.Printf("    Worktree: %s\n", session.WorktreePath)
 		fmt.Printf("    Tmux Session: %s\n", session.TmuxSession)
-		sandboxName := session.SandboxName
-		if sandboxName == "" {
-			sandboxName = sandboxManager.GetSandboxName(session.IssueNumber)
-		}
+		sandboxName := resolveSandboxName(session, sandboxManager)
 		fmt.Printf("    Sandbox: %s\n", sandboxName)
 	}
 
@@ -114,15 +133,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 
 		// Clean up sandbox
-		sandboxName := session.SandboxName
-		if sandboxName == "" {
-			sandboxName = sandboxManager.GetSandboxName(session.IssueNumber)
-		}
+		sandboxName := resolveSandboxName(session, sandboxManager)
 
 		sandboxExists, err := sandboxManager.SandboxExists(sandboxName)
 		if err != nil {
 			fmt.Printf("  Warning: could not check sandbox %s: %v\n", sandboxName, err)
 		} else if sandboxExists {
+			fmt.Printf("  Attempting to delete sandbox: %s\n", sandboxName)
 			if err := sandboxManager.DeleteSandbox(sandboxName); err != nil {
 				fmt.Printf("  Warning: failed to delete sandbox %s: %v\n", sandboxName, err)
 			} else {
