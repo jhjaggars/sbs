@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -26,6 +28,7 @@ The worktree and session metadata are preserved.`,
 func init() {
 	rootCmd.AddCommand(stopCmd)
 	stopCmd.Flags().BoolP("delete-branch", "d", false, "Delete the associated branch when stopping the session")
+	stopCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompts")
 }
 
 func runStop(cmd *cobra.Command, args []string) error {
@@ -35,8 +38,9 @@ func runStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
 	}
 
-	// Get the delete-branch flag
+	// Get flags
 	deleteBranch, _ := cmd.Flags().GetBool("delete-branch")
+	skipConfirmation, _ := cmd.Flags().GetBool("yes")
 
 	// Load sessions
 	sessions, err := config.LoadSessions()
@@ -79,10 +83,29 @@ func runStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		fmt.Printf("Warning: could not check sandbox %s: %v\n", sandboxName, err)
 	} else if sandboxExists {
-		if err := sandboxManager.DeleteSandbox(sandboxName); err != nil {
-			fmt.Printf("Warning: failed to delete sandbox %s: %v\n", sandboxName, err)
-		} else {
-			fmt.Printf("Deleted sandbox: %s\n", sandboxName)
+		// Ask for confirmation before deleting sandbox unless -y flag is used
+		shouldDelete := skipConfirmation
+		if !skipConfirmation {
+			fmt.Printf("Delete sandbox %s? (y/N): ", sandboxName)
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read confirmation: %w", err)
+			}
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response == "y" || response == "yes" {
+				shouldDelete = true
+			} else {
+				fmt.Printf("Sandbox deletion cancelled. Tmux session stopped but sandbox preserved.\n")
+			}
+		}
+
+		if shouldDelete {
+			if err := sandboxManager.DeleteSandbox(sandboxName); err != nil {
+				fmt.Printf("Warning: failed to delete sandbox %s: %v\n", sandboxName, err)
+			} else {
+				fmt.Printf("Deleted sandbox: %s\n", sandboxName)
+			}
 		}
 	} else {
 		fmt.Printf("Sandbox %s was not running\n", sandboxName)
