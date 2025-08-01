@@ -143,6 +143,22 @@ update_claude_project_trust
 # Install Claude Code hook in sandbox environment
 install_claude_hook
 
+# Ensure SBS_TITLE environment variable is available to sandbox
+# The tmux session sets this via 'tmux set-environment', but we need to export it
+# so that it's inherited by the sandbox process
+if [ -n "$SBS_TITLE" ]; then
+  export SBS_TITLE
+else
+  # If SBS_TITLE is not set, try to get it from tmux environment
+  # This handles cases where the variable was set via 'tmux set-environment'
+  if command -v tmux >/dev/null 2>&1; then
+    TMUX_OUTPUT=$(tmux show-environment SBS_TITLE 2>/dev/null || echo "")
+    if [[ "$TMUX_OUTPUT" =~ ^SBS_TITLE=(.*)$ ]]; then
+      export SBS_TITLE="${BASH_REMATCH[1]}"
+    fi
+  fi
+fi
+
 sandbox \
   --net="host" \
   --bind /tmp/tmux-1000 \
