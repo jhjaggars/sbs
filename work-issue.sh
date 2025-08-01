@@ -63,8 +63,85 @@ if [ -n "$SBS_TITLE" ]; then
   SANDBOX_NAME="work-issue-$REPO_NAME-$1-$SANITIZED_TITLE"
 fi
 
+# Function to install Claude Code hook in sandbox
+install_claude_hook() {
+  local hook_script="/work/scripts/claude-code-stop-hook.sh"
+  local claude_config="$HOME/.claude/config.json"
+  local sandbox_hook="$HOME/claude-code-stop-hook.sh"
+  
+  echo "Installing Claude Code hook in sandbox..."
+  
+  # Check if hook script exists in the project
+  if [ ! -f "$hook_script" ]; then
+    echo "Warning: Claude Code hook script not found at $hook_script, skipping hook installation"
+    return 1
+  fi
+  
+  # Copy hook script to sandbox home directory
+  if cp "$hook_script" "$sandbox_hook"; then
+    chmod +x "$sandbox_hook"
+    echo "Claude Code hook script copied to sandbox: $sandbox_hook"
+  else
+    echo "Warning: Failed to copy Claude Code hook script, skipping hook installation"
+    return 1
+  fi
+  
+  # Check if jq is available for JSON manipulation
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "Warning: jq not found, skipping Claude Code hook configuration"
+    return 1
+  fi
+  
+  # Check if Claude config file exists
+  if [ ! -f "$claude_config" ]; then
+    echo "Warning: Claude config file not found at $claude_config, creating basic config"
+    echo '{"projects": {}, "hooks": {}}' > "$claude_config"
+  fi
+  
+  # Create a temporary file for atomic update
+  local temp_file=$(mktemp)
+  
+  # Configure Claude Code hook - add PostToolUse hook
+  jq --arg hook_path "$sandbox_hook" '
+    .hooks.PostToolUse = [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": $hook_path
+          }
+        ]
+      }
+    ]
+  ' "$claude_config" > "$temp_file"
+  
+  if [ $? -eq 0 ]; then
+    mv "$temp_file" "$claude_config"
+    echo "Claude Code hook configured in sandbox: PostToolUse -> $sandbox_hook"
+  else
+    echo "Warning: Failed to configure Claude Code hook"
+    rm -f "$temp_file"
+    return 1
+  fi
+  
+  # Create .sbs directory in working directory for hook output
+  if mkdir -p /work/.sbs; then
+    echo "Created .sbs directory for hook output: /work/.sbs"
+  else
+    echo "Warning: Failed to create .sbs directory"
+    return 1
+  fi
+  
+  echo "Claude Code hook installation completed successfully"
+  return 0
+}
+
 # Update Claude project trust settings for current directory
 update_claude_project_trust
+
+# Install Claude Code hook in sandbox environment
+install_claude_hook
 
 sandbox \
   --net="host" \
