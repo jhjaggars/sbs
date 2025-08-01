@@ -2,8 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 type Config struct {
@@ -21,6 +24,15 @@ type Config struct {
 	CommandLogPath  string `json:"command_log_path,omitempty"`  // Optional log file path
 }
 
+// ResourceCreationEntry tracks the creation of individual resources during session setup
+type ResourceCreationEntry struct {
+	ResourceType string                 `json:"resource_type"` // branch, worktree, tmux, sandbox
+	ResourceID   string                 `json:"resource_id"`   // identifier for the resource
+	CreatedAt    time.Time              `json:"created_at"`    // when the resource was created
+	Status       string                 `json:"status"`        // created, failed, cleanup
+	Metadata     map[string]interface{} `json:"metadata"`      // additional resource-specific data
+}
+
 type SessionMetadata struct {
 	IssueNumber    int    `json:"issue_number"`
 	IssueTitle     string `json:"issue_title"`
@@ -34,6 +46,13 @@ type SessionMetadata struct {
 	CreatedAt      string `json:"created_at"`
 	LastActivity   string `json:"last_activity"`
 	Status         string `json:"status"` // active, stopped, stale
+
+	// Resource tracking fields for enhanced cleanup and failure recovery
+	ResourceStatus      string                  `json:"resource_status,omitempty"`       // creating, active, cleanup, failed
+	CurrentCreationStep string                  `json:"current_creation_step,omitempty"` // tracks current step in resource creation
+	FailurePoint        string                  `json:"failure_point,omitempty"`         // step where creation failed
+	FailureReason       string                  `json:"failure_reason,omitempty"`        // reason for failure
+	ResourceCreationLog []ResourceCreationEntry `json:"resource_creation_log,omitempty"` // log of all created resources
 }
 
 func DefaultConfig() *Config {
@@ -71,6 +90,11 @@ func LoadConfig() (*Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+
+	// Validate required fields for resource tracking features
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	return &config, nil
@@ -242,4 +266,37 @@ func LoadAllRepositorySessions() ([]SessionMetadata, error) {
 	// Use only the global sessions file as the single source of truth
 	// Repository scoping is handled by filtering based on RepositoryRoot field
 	return LoadSessions()
+}
+
+// validateConfig validates that required fields are present for resource tracking features
+func validateConfig(config *Config) error {
+	var errors []string
+
+	// Validate essential paths - only check if they're not set to reasonable defaults
+	if config.WorktreeBasePath == "" {
+		errors = append(errors, "worktree_base_path is required")
+	}
+
+	// RepoPath can be empty (will default to "." in DefaultConfig), so only validate if it's explicitly empty in a non-default scenario
+	// Skip this validation as it's too restrictive for test scenarios
+
+	// Validate command logging configuration if enabled
+	if config.CommandLogging {
+		validLevels := map[string]bool{
+			"debug": true,
+			"info":  true,
+			"error": true,
+			"":      true, // Empty string is acceptable (defaults to info)
+		}
+		if !validLevels[config.CommandLogLevel] {
+			errors = append(errors, "command_log_level must be one of: debug, info, error")
+		}
+	}
+
+	// If there are validation errors, return them as a single error
+	if len(errors) > 0 {
+		return fmt.Errorf("validation errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }

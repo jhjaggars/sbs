@@ -3,10 +3,13 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
+	"sbs/pkg/git"
 	"sbs/pkg/issue"
+	"sbs/pkg/repo"
 	"sbs/pkg/sandbox"
 	"sbs/pkg/tmux"
 )
@@ -22,6 +25,7 @@ The worktree and session metadata are preserved.`,
 
 func init() {
 	rootCmd.AddCommand(stopCmd)
+	stopCmd.Flags().BoolP("delete-branch", "d", false, "Delete the associated branch when stopping the session")
 }
 
 func runStop(cmd *cobra.Command, args []string) error {
@@ -30,6 +34,9 @@ func runStop(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
 	}
+
+	// Get the delete-branch flag
+	deleteBranch, _ := cmd.Flags().GetBool("delete-branch")
 
 	// Load sessions
 	sessions, err := config.LoadSessions()
@@ -94,8 +101,61 @@ func runStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save sessions: %w", err)
 	}
 
+	// Handle branch deletion if requested
+	if deleteBranch {
+		if err := deleteBranchForSession(session); err != nil {
+			fmt.Printf("Warning: failed to delete branch: %v\n", err)
+		} else {
+			fmt.Printf("Deleted branch: %s\n", session.Branch)
+		}
+	}
+
 	fmt.Printf("Session for issue #%d stopped. Worktree preserved at: %s\n",
 		issueNumber, session.WorktreePath)
+
+	return nil
+}
+
+// deleteBranchForSession deletes the branch associated with a session
+func deleteBranchForSession(session *config.SessionMetadata) error {
+	if session.Branch == "" {
+		return fmt.Errorf("no branch associated with session")
+	}
+
+	// Initialize repository manager to get current repo
+	repoManager := repo.NewManager()
+	currentRepo, err := repoManager.DetectCurrentRepository()
+	if err != nil {
+		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+
+	// Initialize git manager
+	gitManager, err := git.NewManager(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to initialize git manager: %w", err)
+	}
+
+	// Validate branch deletion is safe
+	safe, warnings, err := gitManager.ValidateBranchDeletion(session.Branch)
+	if err != nil {
+		return fmt.Errorf("failed to validate branch deletion: %w", err)
+	}
+
+	if !safe {
+		return fmt.Errorf("branch deletion not safe: %s", strings.Join(warnings, ", "))
+	}
+
+	if len(warnings) > 0 {
+		for _, warning := range warnings {
+			fmt.Printf("Warning: %s\n", warning)
+		}
+	}
+
+	// Delete the branch
+	err = gitManager.DeleteIssueBranch(session.Branch)
+	if err != nil {
+		return fmt.Errorf("failed to delete branch %s: %w", session.Branch, err)
+	}
 
 	return nil
 }
