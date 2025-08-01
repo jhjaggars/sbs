@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "/existing/project1": {
+      "allowedTools": ["Read", "Write"],
+      "hasTrustDialogAccepted": true,
+      "hasCompletedProjectOnboarding": true
+    },
+    "/existing/project2": {
+      "allowedTools": [],
+      "hasTrustDialogAccepted": false,
+      "hasCompletedProjectOnboarding": false
+    }
+  },
+  "otherSettings": {
+    "theme": "dark",
+    "autoSave": true
+  }
+}

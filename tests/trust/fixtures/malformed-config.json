@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "/bad/project": {
+      "allowedTools": ["Read", "Write"
+      "hasTrustDialogAccepted": true
+    }
+  }

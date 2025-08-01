@@ -1,0 +1,9 @@
+{
+  "projects": {
+    "/existing/project": {
+      "allowedTools": ["Read", "Write"],
+      "hasTrustDialogAccepted": true,
+      "hasCompletedProjectOnboarding": true
+    }
+  }
+}
