@@ -12,6 +12,7 @@ import (
 	"sbs/pkg/config"
 	"sbs/pkg/repo"
 	"sbs/pkg/sandbox"
+	"sbs/pkg/status"
 	"sbs/pkg/tmux"
 )
 
@@ -83,6 +84,8 @@ type Model struct {
 	tmuxManager            *tmux.Manager
 	repoManager            *repo.Manager
 	sandboxManager         *sandbox.Manager
+	statusDetector         *status.Detector
+	config                 *config.Config
 	width                  int
 	height                 int
 	error                  error
@@ -95,21 +98,31 @@ func NewModel() Model {
 	repoManager := repo.NewManager()
 	currentRepo, _ := repoManager.DetectCurrentRepository()
 
+	// Load configuration
+	cfg, _ := config.LoadConfig()
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+
 	// Default to repository view if in a repo, global otherwise
 	viewMode := ViewModeGlobal
 	if currentRepo != nil {
 		viewMode = ViewModeRepository
 	}
 
+	tmuxManager := tmux.NewManager()
+	sandboxManager := sandbox.NewManager()
 	return Model{
 		sessions:               []config.SessionMetadata{},
 		cursor:                 0,
 		showHelp:               false,
 		viewMode:               viewMode,
 		currentRepo:            currentRepo,
-		tmuxManager:            tmux.NewManager(),
+		tmuxManager:            tmuxManager,
 		repoManager:            repoManager,
-		sandboxManager:         sandbox.NewManager(),
+		sandboxManager:         sandboxManager,
+		statusDetector:         status.NewDetector(tmuxManager, sandboxManager),
+		config:                 cfg,
 		showConfirmationDialog: false,
 		confirmationMessage:    "",
 		pendingCleanSessions:   []config.SessionMetadata{},
@@ -120,6 +133,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.refreshSessions(),
 		tea.EnterAltScreen,
+		m.tickAutoRefresh(),
 	)
 }
 
@@ -221,6 +235,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.error = msg.err
 		m.showConfirmationDialog = false
 		return m, m.refreshSessions()
+
+	case tickMsg:
+		// Auto-refresh sessions and schedule next tick
+		return m, tea.Batch(
+			m.refreshSessions(),
+			m.tickAutoRefresh(),
+		)
 	}
 
 	return m, nil
@@ -263,9 +284,8 @@ func (m Model) View() string {
 
 		// Sessions
 		for i, session := range m.sessions {
-			// Determine actual status by checking tmux
-			status := m.getSessionStatus(session.TmuxSession)
-			lastActivity := m.formatTimeAgo(session.LastActivity)
+			// Determine actual status using status detector
+			sessionStatus := m.getSessionStatus(session)
 
 			// Format row based on view mode using responsive widths
 			var row string
@@ -275,16 +295,16 @@ func (m Model) View() string {
 					session.IssueTitle,
 					session.RepositoryName,
 					session.Branch,
-					FormatStatus(status),
-					lastActivity,
+					FormatStatus(sessionStatus.Status),
+					sessionStatus.TimeDelta,
 				)
 			} else {
 				row = FormatRepositoryViewRow(widths,
 					session.IssueNumber,
 					session.IssueTitle,
 					session.Branch,
-					FormatStatus(status),
-					lastActivity,
+					FormatStatus(sessionStatus.Status),
+					sessionStatus.TimeDelta,
 				)
 			}
 
@@ -357,12 +377,8 @@ func (m Model) helpView() string {
 	return helpStyle.Render(help.String())
 }
 
-func (m Model) getSessionStatus(sessionName string) string {
-	exists, _ := m.tmuxManager.SessionExists(sessionName)
-	if exists {
-		return "active"
-	}
-	return "stopped"
+func (m Model) getSessionStatus(session config.SessionMetadata) status.SessionStatus {
+	return m.statusDetector.DetectSessionStatus(session)
 }
 
 func (m Model) formatTimeAgo(timeStr string) string {
@@ -407,6 +423,8 @@ type confirmationDialogMsg struct {
 	show    bool
 	message string
 }
+
+type tickMsg struct{}
 
 // toggleViewMode switches between repository and global view modes
 func (m Model) toggleViewMode() Model {
@@ -623,6 +641,18 @@ func (m Model) identifyAndCleanStaleSessions() struct {
 		cleanedSessions: cleanedSessions,
 		err:             err,
 	}
+}
+
+// tickAutoRefresh creates a command that triggers auto-refresh after the configured interval
+func (m Model) tickAutoRefresh() tea.Cmd {
+	if !m.config.StatusTracking {
+		return nil
+	}
+
+	interval := time.Duration(m.config.StatusRefreshIntervalSecs) * time.Second
+	return tea.Tick(interval, func(t time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
 // Helper function for maximum of two integers
