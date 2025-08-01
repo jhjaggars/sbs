@@ -362,7 +362,10 @@ func (m *Manager) DeleteIssueBranch(branchName string) error {
 	// Try normal deletion first
 	args := []string{"branch", "-d", branchName}
 	_, err = m.runGitCommand(args)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to delete branch %s (safe deletion attempt): %w", branchName, err)
+	}
+	return nil
 }
 
 // DeleteIssueBranchForce forcefully deletes a branch (even if unmerged)
@@ -381,7 +384,10 @@ func (m *Manager) DeleteIssueBranchForce(branchName string) error {
 	// Force deletion
 	args := []string{"branch", "-D", branchName}
 	_, err = m.runGitCommand(args)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to delete branch %s (force deletion attempt): %w", branchName, err)
+	}
+	return nil
 }
 
 // DeleteCurrentBranch always returns an error as a safety measure
@@ -415,7 +421,9 @@ func (m *Manager) ListIssueBranches() ([]string, error) {
 	return branches, nil
 }
 
-// FindOrphanedIssueBranches finds issue branches that don't have active sessions
+// FindOrphanedIssueBranches finds issue branches that don't have active sessions.
+// It compares all existing issue branches against the provided list of active session issue numbers
+// and returns branches that don't correspond to any active session.
 func (m *Manager) FindOrphanedIssueBranches(activeSessionIssues []int) ([]string, error) {
 	allIssueBranches, err := m.ListIssueBranches()
 	if err != nil {
@@ -440,7 +448,9 @@ func (m *Manager) FindOrphanedIssueBranches(activeSessionIssues []int) ([]string
 	return orphanedBranches, nil
 }
 
-// GetBranchAge returns the age of a branch based on its last commit
+// GetBranchAge returns the age of a branch based on its last commit.
+// The age is calculated as the time elapsed since the last commit on the branch.
+// Returns an error if the branch doesn't exist or if the commit information cannot be retrieved.
 func (m *Manager) GetBranchAge(branchName string) (time.Duration, error) {
 	if !m.branchExists(branchName) {
 		return 0, fmt.Errorf("branch %s does not exist", branchName)
@@ -463,7 +473,10 @@ func (m *Manager) GetBranchAge(branchName string) (time.Duration, error) {
 	return time.Since(commitTime), nil
 }
 
-// ValidateBranchDeletion checks if a branch is safe to delete
+// ValidateBranchDeletion checks if a branch is safe to delete.
+// Returns true if the branch can be safely deleted, false if there are concerns.
+// The warnings slice contains human-readable messages about potential issues.
+// This method checks for: branch existence, current branch status, and unmerged changes.
 func (m *Manager) ValidateBranchDeletion(branchName string) (bool, []string, error) {
 	var warnings []string
 

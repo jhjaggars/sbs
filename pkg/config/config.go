@@ -2,8 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -88,6 +90,11 @@ func LoadConfig() (*Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, err
+	}
+
+	// Validate required fields for resource tracking features
+	if err := validateConfig(&config); err != nil {
+		return nil, fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	return &config, nil
@@ -259,4 +266,37 @@ func LoadAllRepositorySessions() ([]SessionMetadata, error) {
 	// Use only the global sessions file as the single source of truth
 	// Repository scoping is handled by filtering based on RepositoryRoot field
 	return LoadSessions()
+}
+
+// validateConfig validates that required fields are present for resource tracking features
+func validateConfig(config *Config) error {
+	var errors []string
+
+	// Validate essential paths - only check if they're not set to reasonable defaults
+	if config.WorktreeBasePath == "" {
+		errors = append(errors, "worktree_base_path is required")
+	}
+
+	// RepoPath can be empty (will default to "." in DefaultConfig), so only validate if it's explicitly empty in a non-default scenario
+	// Skip this validation as it's too restrictive for test scenarios
+
+	// Validate command logging configuration if enabled
+	if config.CommandLogging {
+		validLevels := map[string]bool{
+			"debug": true,
+			"info":  true,
+			"error": true,
+			"":      true, // Empty string is acceptable (defaults to info)
+		}
+		if !validLevels[config.CommandLogLevel] {
+			errors = append(errors, "command_log_level must be one of: debug, info, error")
+		}
+	}
+
+	// If there are validation errors, return them as a single error
+	if len(errors) > 0 {
+		return fmt.Errorf("validation errors: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }

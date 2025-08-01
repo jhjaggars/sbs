@@ -264,12 +264,16 @@ func executeBranchCleanup(dryRun, force bool) error {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
 
-	// Get active issue numbers
+	// Get active issue numbers with robust active session detection
+	tmuxManager := tmux.NewManager()
 	activeIssues := make([]int, 0, len(sessions))
 	for _, session := range sessions {
 		// Only include active sessions
 		if session.Status == "active" {
-			activeIssues = append(activeIssues, session.IssueNumber)
+			// Optional: verify tmux session actually exists for more robust detection
+			if exists, _ := tmuxManager.SessionExists(session.TmuxSession); exists {
+				activeIssues = append(activeIssues, session.IssueNumber)
+			}
 		}
 	}
 
