@@ -1,0 +1,26 @@
+{
+  "id": "stop-clean-from-list",
+  "started": "2025-07-31T13:47:00Z",
+  "lastUpdated": "2025-07-31T13:47:00Z",
+  "status": "active",
+  "phase": "complete",
+  "progress": {
+    "discovery": { "answered": 5, "total": 5 },
+    "detail": { "answered": 5, "total": 5 }
+  },
+  "contextFiles": [
+    "pkg/tui/model.go",
+    "pkg/tui/styles.go", 
+    "cmd/stop.go",
+    "cmd/clean.go",
+    "cmd/attach.go",
+    "pkg/config/config.go",
+    "pkg/tmux/manager.go"
+  ],
+  "relatedFeatures": [
+    "attach-from-list (Enter key functionality)",
+    "stop command (cmd/stop.go)",
+    "clean command (cmd/clean.go)",
+    "TUI navigation and key bindings"
+  ]
+}
