@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"sbs/pkg/cmdlog"
 	"sbs/pkg/config"
 	"sbs/pkg/validation"
 )
@@ -22,6 +23,7 @@ Each issue gets its own branch, worktree, and tmux session for organized develop
 }
 
 var cfg *config.Config
+var verbose bool
 
 func Execute() error {
 	return rootCmd.Execute()
@@ -32,6 +34,7 @@ func init() {
 
 	// Global flags
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default is ~/.config/sbs/config.json)")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose command logging")
 }
 
 func initConfig() {
@@ -40,6 +43,33 @@ func initConfig() {
 	if err != nil {
 		fmt.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Initialize command logging based on configuration and verbose flag
+	enableLogging := cfg.CommandLogging || verbose
+	if enableLogging {
+		logConfig := cmdlog.Config{
+			Enabled:  true,
+			Level:    cfg.CommandLogLevel,
+			FilePath: cfg.CommandLogPath,
+		}
+
+		// Override settings when verbose flag is used
+		if verbose {
+			logConfig.Level = "debug"
+			// If no file path is configured, verbose output goes to stderr
+			if logConfig.FilePath == "" {
+				logConfig.FilePath = "" // Empty string means stderr output
+			}
+		}
+
+		// Set default log level if not specified
+		if logConfig.Level == "" {
+			logConfig.Level = "info"
+		}
+
+		logger := cmdlog.NewCommandLogger(logConfig)
+		cmdlog.SetGlobalLogger(logger)
 	}
 
 	// Validate required tools are available

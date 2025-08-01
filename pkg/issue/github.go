@@ -6,6 +6,9 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
+
+	"sbs/pkg/cmdlog"
 )
 
 // commandExecutor interface for testing
@@ -17,8 +20,20 @@ type commandExecutor interface {
 type realCommandExecutor struct{}
 
 func (r *realCommandExecutor) executeCommand(name string, args ...string) ([]byte, error) {
+	ctx := cmdlog.LogCommandGlobal(name, args, cmdlog.GetCaller())
+
 	cmd := exec.Command(name, args...)
-	return cmd.Output()
+	start := time.Now()
+	output, err := cmd.Output()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return output, err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return output, nil
 }
 
 type GitHubClient struct {
@@ -121,11 +136,28 @@ func (g *GitHubClient) ListIssues(searchQuery string, limit int) ([]Issue, error
 
 // CheckGHInstalled verifies that the gh command is available
 func CheckGHInstalled() error {
+	ctx := cmdlog.LogCommandGlobal("gh", []string{"--version"}, cmdlog.GetCaller())
+
 	cmd := exec.Command("gh", "--version")
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
 		return fmt.Errorf("gh command not found. Please install GitHub CLI: https://cli.github.com/")
 	}
+
+	ctx.LogCompletion(true, 0, "", duration)
 	return nil
+}
+
+// getExitCode extracts exit code from exec.Cmd
+func getExitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState != nil {
+		return cmd.ProcessState.ExitCode()
+	}
+	return -1
 }
 
 // ParseIssueNumber extracts issue number from various formats

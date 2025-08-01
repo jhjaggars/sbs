@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"sbs/pkg/cmdlog"
 )
 
 type Session struct {
@@ -58,18 +60,8 @@ func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string,
 	}
 
 	// Create new detached session with environment variables
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, "-c", workingDir)
-
-	// Set environment variables for the tmux command
-	if len(env) > 0 && env[0] != nil {
-		cmdEnv := os.Environ()
-		for key, value := range env[0] {
-			cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", key, value))
-		}
-		cmd.Env = cmdEnv
-	}
-
-	if err := cmd.Run(); err != nil {
+	args := []string{"new-session", "-d", "-s", sessionName, "-c", workingDir}
+	if err := m.runTmuxCommandWithEnv(args, env...); err != nil {
 		return nil, fmt.Errorf("failed to create tmux session %s: %w", sessionName, err)
 	}
 
@@ -92,8 +84,8 @@ func (m *Manager) CreateSession(issueNumber int, workingDir, sessionName string,
 }
 
 func (m *Manager) SessionExists(sessionName string) (bool, error) {
-	cmd := exec.Command("tmux", "has-session", "-t", sessionName)
-	err := cmd.Run()
+	args := []string{"has-session", "-t", sessionName}
+	err := m.runTmuxCommandRun(args)
 	if err != nil {
 		// Exit code 1 means session doesn't exist
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -139,16 +131,16 @@ func (m *Manager) AttachToSession(sessionName string, env ...map[string]string) 
 }
 
 func (m *Manager) KillSession(sessionName string) error {
-	cmd := exec.Command("tmux", "kill-session", "-t", sessionName)
-	if err := cmd.Run(); err != nil {
+	args := []string{"kill-session", "-t", sessionName}
+	if err := m.runTmuxCommandRun(args); err != nil {
 		return fmt.Errorf("failed to kill session %s: %w", sessionName, err)
 	}
 	return nil
 }
 
 func (m *Manager) ListSessions() ([]*Session, error) {
-	cmd := exec.Command("tmux", "list-sessions", "-F", "#{session_name}|#{session_created}|#{session_last_attached}")
-	output, err := cmd.Output()
+	args := []string{"list-sessions", "-F", "#{session_name}|#{session_created}|#{session_last_attached}"}
+	output, err := m.runTmuxCommand(args)
 	if err != nil {
 		// No sessions exist
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
@@ -215,9 +207,9 @@ func (m *Manager) StartWorkIssue(sessionName string, issueNumber int, workIssueS
 
 	// Send command to run work-issue script in the session
 	command := fmt.Sprintf("%s %d", workIssueScript, issueNumber)
-	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, command, "Enter")
+	args := []string{"send-keys", "-t", sessionName, command, "Enter"}
 
-	if err := cmd.Run(); err != nil {
+	if err := m.runTmuxCommandRun(args); err != nil {
 		return fmt.Errorf("failed to start work-issue in session %s: %w", sessionName, err)
 	}
 
@@ -259,9 +251,9 @@ func (m *Manager) ExecuteCommandWithSubstitution(sessionName, command string, ar
 	}
 
 	// Send command to the session
-	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, fullCommand, "Enter")
+	tmuxArgs := []string{"send-keys", "-t", sessionName, fullCommand, "Enter"}
 
-	if err := cmd.Run(); err != nil {
+	if err := m.runTmuxCommandRun(tmuxArgs); err != nil {
 		return fmt.Errorf("failed to execute command in session %s: %w", sessionName, err)
 	}
 
@@ -283,13 +275,13 @@ func (m *Manager) substituteParameters(input string, substitutions map[string]st
 
 func (m *Manager) setWorkingDirectory(sessionName, workingDir string) error {
 	// Send cd command to the session
-	cmd := exec.Command("tmux", "send-keys", "-t", sessionName, fmt.Sprintf("cd %s", workingDir), "Enter")
-	return cmd.Run()
+	args := []string{"send-keys", "-t", sessionName, fmt.Sprintf("cd %s", workingDir), "Enter"}
+	return m.runTmuxCommandRun(args)
 }
 
 func (m *Manager) getSessionWorkingDir(sessionName string) (string, error) {
-	cmd := exec.Command("tmux", "display-message", "-t", sessionName, "-p", "#{pane_current_path}")
-	output, err := cmd.Output()
+	args := []string{"display-message", "-t", sessionName, "-p", "#{pane_current_path}"}
+	output, err := m.runTmuxCommand(args)
 	if err != nil {
 		return "", err
 	}
@@ -328,8 +320,8 @@ func (m *Manager) setEnvironmentVariables(sessionName string, env map[string]str
 	}
 
 	for key, value := range env {
-		cmd := exec.Command("tmux", "set-environment", "-t", sessionName, key, value)
-		if err := cmd.Run(); err != nil {
+		args := []string{"set-environment", "-t", sessionName, key, value}
+		if err := m.runTmuxCommandRun(args); err != nil {
 			return fmt.Errorf("failed to set environment variable %s=%s: %w", key, value, err)
 		}
 	}
@@ -453,4 +445,76 @@ func normalizeTitle(title string) string {
 	}
 
 	return result.String()
+}
+
+// runTmuxCommand executes a tmux command with logging and returns output
+func (m *Manager) runTmuxCommand(args []string) ([]byte, error) {
+	ctx := cmdlog.LogCommandGlobal("tmux", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("tmux", args...)
+	start := time.Now()
+	output, err := cmd.Output()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return output, err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return output, nil
+}
+
+// runTmuxCommandRun executes a tmux command with logging without capturing output
+func (m *Manager) runTmuxCommandRun(args []string) error {
+	ctx := cmdlog.LogCommandGlobal("tmux", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("tmux", args...)
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return nil
+}
+
+// runTmuxCommandWithEnv executes a tmux command with custom environment variables
+func (m *Manager) runTmuxCommandWithEnv(args []string, env ...map[string]string) error {
+	ctx := cmdlog.LogCommandGlobal("tmux", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("tmux", args...)
+
+	// Set environment variables for the tmux command
+	if len(env) > 0 && env[0] != nil {
+		cmdEnv := os.Environ()
+		for key, value := range env[0] {
+			cmdEnv = append(cmdEnv, fmt.Sprintf("%s=%s", key, value))
+		}
+		cmd.Env = cmdEnv
+	}
+
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return nil
+}
+
+// getExitCode extracts exit code from command error
+func getExitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState == nil {
+		return -1
+	}
+	return cmd.ProcessState.ExitCode()
 }

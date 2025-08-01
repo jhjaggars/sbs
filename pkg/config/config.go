@@ -14,6 +14,11 @@ type Config struct {
 	TmuxCommand      string   `json:"tmux_command,omitempty"`      // Custom command to run in tmux session
 	TmuxCommandArgs  []string `json:"tmux_command_args,omitempty"` // Arguments for the custom command
 	NoCommand        bool     `json:"no_command,omitempty"`        // Disable automatic command execution
+
+	// Command logging configuration
+	CommandLogging  bool   `json:"command_logging,omitempty"`   // Enable/disable command logging
+	CommandLogLevel string `json:"command_log_level,omitempty"` // Log level: debug, info, error
+	CommandLogPath  string `json:"command_log_path,omitempty"`  // Optional log file path
 }
 
 type SessionMetadata struct {
@@ -138,6 +143,18 @@ func MergeConfig(base, override *Config) *Config {
 	// NoCommand is a boolean, so we only override if it's explicitly set to true
 	if override.NoCommand {
 		merged.NoCommand = override.NoCommand
+	}
+
+	// Command logging configuration
+	// CommandLogging is a boolean, override if explicitly set to true
+	if override.CommandLogging {
+		merged.CommandLogging = override.CommandLogging
+	}
+	if override.CommandLogLevel != "" {
+		merged.CommandLogLevel = override.CommandLogLevel
+	}
+	if override.CommandLogPath != "" {
+		merged.CommandLogPath = override.CommandLogPath
 	}
 
 	return &merged
