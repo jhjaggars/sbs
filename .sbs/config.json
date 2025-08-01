@@ -1,4 +1,0 @@
-{
-  "tmux_command": "./work-issue.sh",
-  "tmux_command_args": ["$1"]
-}

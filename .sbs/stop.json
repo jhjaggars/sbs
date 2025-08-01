@@ -1,0 +1,13 @@
+{
+  "claude_code_hook": {
+    "timestamp": "2025-08-01T01:09:49Z",
+    "environment": "host",
+    "project_directory": "/home/jhjaggars/code/work-issue",
+    "hook_script": "./scripts/claude-code-stop-hook.sh",
+    "sandbox_detection": false
+  },
+  "hook_data": {
+    "test": "sandbox_detection",
+    "action": "test_hook"
+  }
+}
