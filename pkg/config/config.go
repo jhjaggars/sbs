@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Config struct {
@@ -21,6 +22,15 @@ type Config struct {
 	CommandLogPath  string `json:"command_log_path,omitempty"`  // Optional log file path
 }
 
+// ResourceCreationEntry tracks the creation of individual resources during session setup
+type ResourceCreationEntry struct {
+	ResourceType string                 `json:"resource_type"` // branch, worktree, tmux, sandbox
+	ResourceID   string                 `json:"resource_id"`   // identifier for the resource
+	CreatedAt    time.Time              `json:"created_at"`    // when the resource was created
+	Status       string                 `json:"status"`        // created, failed, cleanup
+	Metadata     map[string]interface{} `json:"metadata"`      // additional resource-specific data
+}
+
 type SessionMetadata struct {
 	IssueNumber    int    `json:"issue_number"`
 	IssueTitle     string `json:"issue_title"`
@@ -34,6 +44,13 @@ type SessionMetadata struct {
 	CreatedAt      string `json:"created_at"`
 	LastActivity   string `json:"last_activity"`
 	Status         string `json:"status"` // active, stopped, stale
+
+	// Resource tracking fields for enhanced cleanup and failure recovery
+	ResourceStatus      string                  `json:"resource_status,omitempty"`       // creating, active, cleanup, failed
+	CurrentCreationStep string                  `json:"current_creation_step,omitempty"` // tracks current step in resource creation
+	FailurePoint        string                  `json:"failure_point,omitempty"`         // step where creation failed
+	FailureReason       string                  `json:"failure_reason,omitempty"`        // reason for failure
+	ResourceCreationLog []ResourceCreationEntry `json:"resource_creation_log,omitempty"` // log of all created resources
 }
 
 func DefaultConfig() *Config {
