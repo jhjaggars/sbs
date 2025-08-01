@@ -70,6 +70,23 @@ var (
 	selectedRowStyle = lipgloss.NewStyle().
 				Background(lipgloss.Color("#44475A")).
 				Bold(true)
+
+	// Modal dialog styles
+	modalBackgroundStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#282828")).
+				Foreground(lipgloss.Color("#F8F8F2"))
+
+	modalContentStyle = lipgloss.NewStyle().
+				Background(lipgloss.Color("#44475A")).
+				Foreground(lipgloss.Color("#F8F8F2")).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(1, 2).
+				Bold(true)
+
+	confirmationTextStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#F8F8F2")).
+				Bold(true)
 )
 
 func FormatStatus(status string) string {

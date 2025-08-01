@@ -11,6 +11,7 @@ import (
 
 	"sbs/pkg/config"
 	"sbs/pkg/repo"
+	"sbs/pkg/sandbox"
 	"sbs/pkg/tmux"
 )
 
@@ -22,6 +23,8 @@ type keyMap struct {
 	Help       key.Binding
 	Refresh    key.Binding
 	ToggleView key.Binding
+	Stop       key.Binding
+	Clean      key.Binding
 }
 
 var keys = keyMap{
@@ -53,6 +56,14 @@ var keys = keyMap{
 		key.WithKeys("g"),
 		key.WithHelp("g", "toggle global/repo view"),
 	),
+	Stop: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "stop session"),
+	),
+	Clean: key.NewBinding(
+		key.WithKeys("c"),
+		key.WithHelp("c", "clean stale"),
+	),
 }
 
 type ViewMode int
@@ -63,17 +74,21 @@ const (
 )
 
 type Model struct {
-	sessions     []config.SessionMetadata
-	tmuxSessions []*tmux.Session
-	cursor       int
-	showHelp     bool
-	viewMode     ViewMode
-	currentRepo  *repo.Repository
-	tmuxManager  *tmux.Manager
-	repoManager  *repo.Manager
-	width        int
-	height       int
-	error        error
+	sessions               []config.SessionMetadata
+	tmuxSessions           []*tmux.Session
+	cursor                 int
+	showHelp               bool
+	viewMode               ViewMode
+	currentRepo            *repo.Repository
+	tmuxManager            *tmux.Manager
+	repoManager            *repo.Manager
+	sandboxManager         *sandbox.Manager
+	width                  int
+	height                 int
+	error                  error
+	showConfirmationDialog bool
+	confirmationMessage    string
+	pendingCleanSessions   []config.SessionMetadata
 }
 
 func NewModel() Model {
@@ -87,13 +102,17 @@ func NewModel() Model {
 	}
 
 	return Model{
-		sessions:    []config.SessionMetadata{},
-		cursor:      0,
-		showHelp:    false,
-		viewMode:    viewMode,
-		currentRepo: currentRepo,
-		tmuxManager: tmux.NewManager(),
-		repoManager: repoManager,
+		sessions:               []config.SessionMetadata{},
+		cursor:                 0,
+		showHelp:               false,
+		viewMode:               viewMode,
+		currentRepo:            currentRepo,
+		tmuxManager:            tmux.NewManager(),
+		repoManager:            repoManager,
+		sandboxManager:         sandbox.NewManager(),
+		showConfirmationDialog: false,
+		confirmationMessage:    "",
+		pendingCleanSessions:   []config.SessionMetadata{},
 	}
 }
 
@@ -112,6 +131,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle modal dialog keys first (higher priority)
+		if m.showConfirmationDialog {
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.showConfirmationDialog = false
+				m.confirmationMessage = ""
+				m.pendingCleanSessions = []config.SessionMetadata{}
+				return m, nil
+			case tea.KeyEnter:
+				m.showConfirmationDialog = false
+				return m, m.executeCleanup()
+			case tea.KeyRunes:
+				switch string(msg.Runes) {
+				case "y", "Y":
+					m.showConfirmationDialog = false
+					return m, m.executeCleanup()
+				case "n", "N":
+					m.showConfirmationDialog = false
+					m.confirmationMessage = ""
+					m.pendingCleanSessions = []config.SessionMetadata{}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		// Normal key handling when modal is not shown
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
@@ -135,6 +181,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case key.Matches(msg, keys.Stop):
+			if len(m.sessions) > 0 && m.cursor < len(m.sessions) {
+				return m, m.stopSelectedSession()
+			}
+			return m, nil
+
+		case key.Matches(msg, keys.Clean):
+			return m.showCleanConfirmation(), nil
+
 		case key.Matches(msg, keys.Help):
 			m.showHelp = !m.showHelp
 			return m, nil
@@ -157,6 +212,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.error = msg.err
 		}
 		return m, nil
+
+	case stopSessionMsg:
+		m.error = msg.err
+		return m, m.refreshSessions()
+
+	case cleanSessionsMsg:
+		m.error = msg.err
+		m.showConfirmationDialog = false
+		return m, m.refreshSessions()
 	}
 
 	return m, nil
@@ -239,17 +303,43 @@ func (m Model) View() string {
 	if m.showHelp {
 		b.WriteString("\n" + m.helpView())
 	} else {
-		helpText := "\nPress enter to attach, ? for help, g to toggle view, r to refresh, q to quit"
+		helpText := "\nenter: attach, s: stop, c: clean, ?: help, g: toggle, r: refresh, q: quit"
 		if m.currentRepo == nil && m.viewMode == ViewModeRepository {
-			helpText = "\nNot in git repository - showing global view. Press enter to attach, ? for help, r to refresh, q to quit"
+			helpText = "\nNot in git repository - global view. enter: attach, s: stop, c: clean, ?: help, r: refresh, q: quit"
 		}
 		b.WriteString(helpStyle.Render(helpText))
 	}
 
-	return lipgloss.NewStyle().
+	content := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
 		Render(b.String())
+
+	// Render modal dialog overlay if shown
+	if m.showConfirmationDialog {
+		dialog := modalContentStyle.Render(m.confirmationMessage)
+
+		// Center the dialog
+		dialogWidth := lipgloss.Width(dialog)
+		dialogHeight := lipgloss.Height(dialog)
+
+		x := maxInt(0, (m.width-dialogWidth)/2)
+		y := maxInt(0, (m.height-dialogHeight)/2)
+
+		content = lipgloss.Place(m.width, m.height,
+			lipgloss.Left, lipgloss.Top,
+			lipgloss.JoinVertical(lipgloss.Left,
+				strings.Repeat("\n", y),
+				lipgloss.JoinHorizontal(lipgloss.Left,
+					strings.Repeat(" ", x),
+					dialog,
+				),
+			),
+			lipgloss.WithWhitespaceChars(" "),
+		)
+	}
+
+	return content
 }
 
 func (m Model) helpView() string {
@@ -258,6 +348,8 @@ func (m Model) helpView() string {
 	help.WriteString("↑/k    - Move up\n")
 	help.WriteString("↓/j    - Move down\n")
 	help.WriteString("enter  - Attach to selected session\n")
+	help.WriteString("s      - Stop selected session\n")
+	help.WriteString("c      - Clean stale sessions\n")
 	help.WriteString("g      - Toggle global/repository view\n")
 	help.WriteString("r      - Refresh session list\n")
 	help.WriteString("?      - Toggle this help\n")
@@ -299,6 +391,21 @@ type refreshMsg struct {
 
 type attachMsg struct {
 	err error
+}
+
+type stopSessionMsg struct {
+	err     error
+	success bool
+}
+
+type cleanSessionsMsg struct {
+	err             error
+	cleanedSessions []config.SessionMetadata
+}
+
+type confirmationDialogMsg struct {
+	show    bool
+	message string
 }
 
 // toggleViewMode switches between repository and global view modes
@@ -359,4 +466,169 @@ func (m Model) attachToSession(sessionName string) tea.Cmd {
 		err := m.tmuxManager.AttachToSession(sessionName)
 		return attachMsg{err: err}
 	}
+}
+
+func (m Model) stopSelectedSession() tea.Cmd {
+	if m.cursor < 0 || m.cursor >= len(m.sessions) {
+		return func() tea.Msg {
+			return stopSessionMsg{err: fmt.Errorf("no session selected"), success: false}
+		}
+	}
+
+	session := m.sessions[m.cursor]
+	return func() tea.Msg {
+		// Check if tmux session exists
+		exists, err := m.tmuxManager.SessionExists(session.TmuxSession)
+		if err != nil {
+			return stopSessionMsg{err: fmt.Errorf("failed to check tmux session: %w", err), success: false}
+		}
+
+		// Kill tmux session if it exists
+		if exists {
+			if err := m.tmuxManager.KillSession(session.TmuxSession); err != nil {
+				return stopSessionMsg{err: fmt.Errorf("failed to kill tmux session: %w", err), success: false}
+			}
+		}
+
+		// Stop sandbox if it exists
+		sandboxName := session.SandboxName
+		if sandboxName == "" {
+			sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+		}
+
+		sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
+		if err == nil && sandboxExists {
+			if err := m.sandboxManager.DeleteSandbox(sandboxName); err != nil {
+				return stopSessionMsg{err: fmt.Errorf("failed to delete sandbox: %w", err), success: false}
+			}
+		}
+
+		return stopSessionMsg{err: nil, success: true}
+	}
+}
+
+func (m Model) showCleanConfirmation() Model {
+	staleSessions := m.identifyStaleSessionsInCurrentView()
+	if len(staleSessions) == 0 {
+		return m
+	}
+
+	m.showConfirmationDialog = true
+	m.pendingCleanSessions = staleSessions
+
+	var message strings.Builder
+	if len(staleSessions) == 1 {
+		message.WriteString("Clean 1 stale session?\n")
+	} else {
+		message.WriteString(fmt.Sprintf("Clean %d stale sessions?\n", len(staleSessions)))
+	}
+
+	for _, session := range staleSessions {
+		message.WriteString(fmt.Sprintf("Issue #%d: %s\n", session.IssueNumber, session.IssueTitle))
+	}
+	message.WriteString("\n(y/n) Press y to confirm, n to cancel")
+
+	m.confirmationMessage = message.String()
+	return m
+}
+
+func (m Model) executeCleanup() tea.Cmd {
+	sessions := m.pendingCleanSessions
+	return func() tea.Msg {
+		var cleanedSessions []config.SessionMetadata
+		var hasErrors bool
+
+		for _, session := range sessions {
+			// Clean up sandbox
+			sandboxName := session.SandboxName
+			if sandboxName == "" {
+				sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+			}
+
+			sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
+			if err == nil && sandboxExists {
+				if err := m.sandboxManager.DeleteSandbox(sandboxName); err != nil {
+					hasErrors = true
+					continue
+				}
+			}
+
+			cleanedSessions = append(cleanedSessions, session)
+		}
+
+		var err error
+		if hasErrors {
+			err = fmt.Errorf("failed to clean some sessions")
+		}
+
+		return cleanSessionsMsg{
+			err:             err,
+			cleanedSessions: cleanedSessions,
+		}
+	}
+}
+
+func (m Model) identifyStaleSessionsInCurrentView() []config.SessionMetadata {
+	var staleSessions []config.SessionMetadata
+
+	for _, session := range m.sessions {
+		exists, err := m.tmuxManager.SessionExists(session.TmuxSession)
+		if err != nil {
+			continue
+		}
+		if !exists {
+			staleSessions = append(staleSessions, session)
+		}
+	}
+
+	return staleSessions
+}
+
+func (m Model) identifyAndCleanStaleSessions() struct {
+	cleanedSessions []config.SessionMetadata
+	err             error
+} {
+	staleSessions := m.identifyStaleSessionsInCurrentView()
+
+	var cleanedSessions []config.SessionMetadata
+	var hasErrors bool
+
+	for _, session := range staleSessions {
+		// Clean up sandbox
+		sandboxName := session.SandboxName
+		if sandboxName == "" {
+			sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+		}
+
+		sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
+		if err == nil && sandboxExists {
+			if err := m.sandboxManager.DeleteSandbox(sandboxName); err != nil {
+				hasErrors = true
+				continue
+			}
+		}
+
+		cleanedSessions = append(cleanedSessions, session)
+	}
+
+	var err error
+	if hasErrors {
+		err = fmt.Errorf("failed to clean some sessions")
+	}
+
+	return struct {
+		cleanedSessions []config.SessionMetadata
+		err             error
+	}{
+		cleanedSessions: cleanedSessions,
+		err:             err,
+	}
+}
+
+// Helper function for maximum of two integers
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

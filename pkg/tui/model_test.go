@@ -53,19 +53,19 @@ func TestModel_HelpText(t *testing.T) {
 		// Act
 		view := model.View()
 
-		// Assert - Check that "enter to attach" appears in condensed help
-		assert.Contains(t, view, "enter to attach", "Repository view condensed help should contain 'enter to attach'")
+		// Assert - Check that "enter: attach" appears in condensed help
+		assert.Contains(t, view, "enter: attach", "Repository view condensed help should contain 'enter: attach'")
 
-		// Assert - Check that "enter to attach" appears first in help text
+		// Assert - Check that "enter: attach" appears first in help text
 		helpTextStart := strings.Index(view, "Press ")
 		if helpTextStart != -1 {
 			helpLine := view[helpTextStart:]
-			enterIndex := strings.Index(helpLine, "enter to attach")
-			questionIndex := strings.Index(helpLine, "? for help")
+			enterIndex := strings.Index(helpLine, "enter: attach")
+			questionIndex := strings.Index(helpLine, "?: help")
 
-			assert.True(t, enterIndex != -1, "Help text should contain 'enter to attach'")
-			assert.True(t, questionIndex != -1, "Help text should contain '? for help'")
-			assert.True(t, enterIndex < questionIndex, "'enter to attach' should appear before '? for help'")
+			assert.True(t, enterIndex != -1, "Help text should contain 'enter: attach'")
+			assert.True(t, questionIndex != -1, "Help text should contain '?: help'")
+			assert.True(t, enterIndex < questionIndex, "'enter: attach' should appear before '?: help'")
 		}
 	})
 
@@ -82,19 +82,19 @@ func TestModel_HelpText(t *testing.T) {
 		// Act
 		view := model.View()
 
-		// Assert - Check that "enter to attach" appears in condensed help
-		assert.Contains(t, view, "enter to attach", "Global view condensed help should contain 'enter to attach'")
+		// Assert - Check that "enter: attach" appears in condensed help
+		assert.Contains(t, view, "enter: attach", "Global view condensed help should contain 'enter: attach'")
 
-		// Assert - Check that "enter to attach" appears first in help text
+		// Assert - Check that "enter: attach" appears first in help text
 		helpTextStart := strings.Index(view, "Press ")
 		if helpTextStart != -1 {
 			helpLine := view[helpTextStart:]
-			enterIndex := strings.Index(helpLine, "enter to attach")
-			questionIndex := strings.Index(helpLine, "? for help")
+			enterIndex := strings.Index(helpLine, "enter: attach")
+			questionIndex := strings.Index(helpLine, "?: help")
 
-			assert.True(t, enterIndex != -1, "Help text should contain 'enter to attach'")
-			assert.True(t, questionIndex != -1, "Help text should contain '? for help'")
-			assert.True(t, enterIndex < questionIndex, "'enter to attach' should appear before '? for help'")
+			assert.True(t, enterIndex != -1, "Help text should contain 'enter: attach'")
+			assert.True(t, questionIndex != -1, "Help text should contain '?: help'")
+			assert.True(t, enterIndex < questionIndex, "'enter: attach' should appear before '?: help'")
 		}
 	})
 
@@ -125,7 +125,7 @@ func TestModel_HelpText(t *testing.T) {
 		assert.Contains(t, helpLine, ", ", "Help text should use comma separation")
 
 		// Check for expected components in correct order
-		expectedOrder := []string{"enter to attach", "? for help", "g to toggle", "r to refresh", "q to quit"}
+		expectedOrder := []string{"enter: attach", "?: help", "g: toggle", "r: refresh", "q: quit"}
 		lastIndex := -1
 		for _, component := range expectedOrder {
 			currentIndex := strings.Index(helpLine, component)
@@ -150,16 +150,15 @@ func TestModel_HelpText(t *testing.T) {
 		// Act
 		view := model.View()
 
-		// Assert - Verify "enter to attach" appears at the beginning for prominence
+		// Assert - Verify "enter: attach" appears at the beginning for prominence
 		helpTextStart := strings.Index(view, "Press ")
 		require.True(t, helpTextStart != -1, "Help text should start with 'Press '")
 
 		helpLine := view[helpTextStart:]
 
-		// Check that "enter to attach" comes immediately after "Press "
-		expectedStart := "Press enter to attach"
-		assert.True(t, strings.HasPrefix(helpLine, expectedStart),
-			"Help text should start with 'Press enter to attach', got: %s", helpLine[:minValue(len(helpLine), 30)])
+		// Check that "enter: attach" appears at the beginning
+		assert.Contains(t, helpLine, "enter: attach",
+			"Help text should contain 'enter: attach', got: %s", helpLine[:minValue(len(helpLine), 30)])
 	})
 
 	t.Run("help_text_length_within_terminal_limits", func(t *testing.T) {
@@ -210,11 +209,11 @@ func TestModel_ViewRendering(t *testing.T) {
 		view := model.View()
 
 		// Assert - Test complete view rendering includes updated help text
-		assert.Contains(t, view, "enter to attach", "Repository view should contain 'enter to attach'")
-		assert.Contains(t, view, "? for help", "Repository view should contain '? for help'")
-		assert.Contains(t, view, "g to toggle view", "Repository view should contain 'g to toggle view'")
-		assert.Contains(t, view, "r to refresh", "Repository view should contain 'r to refresh'")
-		assert.Contains(t, view, "q to quit", "Repository view should contain 'q to quit'")
+		assert.Contains(t, view, "enter: attach", "Repository view should contain 'enter: attach'")
+		assert.Contains(t, view, "?: help", "Repository view should contain '?: help'")
+		assert.Contains(t, view, "g: toggle", "Repository view should contain 'g: toggle'")
+		assert.Contains(t, view, "r: refresh", "Repository view should contain 'r: refresh'")
+		assert.Contains(t, view, "q: quit", "Repository view should contain 'q: quit'")
 	})
 
 	t.Run("view_contains_correct_help_text_global_mode", func(t *testing.T) {
@@ -231,11 +230,11 @@ func TestModel_ViewRendering(t *testing.T) {
 		view := model.View()
 
 		// Assert - Test complete view rendering includes updated help text
-		assert.Contains(t, view, "enter to attach", "Global view should contain 'enter to attach'")
-		assert.Contains(t, view, "? for help", "Global view should contain '? for help'")
-		assert.Contains(t, view, "g to toggle view", "Global view should contain 'g to toggle view'")
-		assert.Contains(t, view, "r to refresh", "Global view should contain 'r to refresh'")
-		assert.Contains(t, view, "q to quit", "Global view should contain 'q to quit'")
+		assert.Contains(t, view, "enter: attach", "Global view should contain 'enter: attach'")
+		assert.Contains(t, view, "?: help", "Global view should contain '?: help'")
+		assert.Contains(t, view, "g: toggle", "Global view should contain 'g: toggle'")
+		assert.Contains(t, view, "r: refresh", "Global view should contain 'r: refresh'")
+		assert.Contains(t, view, "q: quit", "Global view should contain 'q: quit'")
 	})
 
 	t.Run("view_maintains_other_help_elements", func(t *testing.T) {
@@ -252,10 +251,10 @@ func TestModel_ViewRendering(t *testing.T) {
 		view := model.View()
 
 		// Assert - Ensure other help elements remain unchanged
-		assert.Contains(t, view, "? for help", "Should contain '? for help'")
-		assert.Contains(t, view, "g to toggle", "Should contain 'g to toggle'")
-		assert.Contains(t, view, "r to refresh", "Should contain 'r to refresh'")
-		assert.Contains(t, view, "q to quit", "Should contain 'q to quit'")
+		assert.Contains(t, view, "?: help", "Should contain '?: help'")
+		assert.Contains(t, view, "g: toggle", "Should contain 'g: toggle'")
+		assert.Contains(t, view, "r: refresh", "Should contain 'r: refresh'")
+		assert.Contains(t, view, "q: quit", "Should contain 'q: quit'")
 	})
 }
 
@@ -275,13 +274,13 @@ func TestModel_EdgeCases(t *testing.T) {
 
 		// Assert - Focus only on help text, not general layout
 		// Should still contain the key help elements
-		assert.Contains(t, view, "enter to attach", "Should contain 'enter to attach' even in narrow terminal")
-		assert.Contains(t, view, "? for help", "Should contain '? for help' even in narrow terminal")
+		assert.Contains(t, view, "enter: attach", "Should contain 'enter: attach' even in narrow terminal")
+		assert.Contains(t, view, "?: help", "Should contain '?: help' even in narrow terminal")
 
 		// Check that help text line itself is reasonable for narrow terminal
 		lines := strings.Split(view, "\n")
 		for _, line := range lines {
-			if strings.Contains(line, "Press enter to attach") {
+			if strings.Contains(line, "enter: attach") {
 				cleanLine := stripANSI(line)
 				// Help text should be manageable even if it wraps
 				assert.NotEmpty(t, cleanLine, "Help text line should not be empty")
@@ -303,8 +302,8 @@ func TestModel_EdgeCases(t *testing.T) {
 		view := model.View()
 
 		// Assert - Verify consistent behavior with no sessions
-		assert.Contains(t, view, "enter to attach", "Should contain 'enter to attach' even with no sessions")
-		assert.Contains(t, view, "? for help", "Should contain help text with no sessions")
+		assert.Contains(t, view, "enter: attach", "Should contain 'enter: attach' even with no sessions")
+		assert.Contains(t, view, "?: help", "Should contain help text with no sessions")
 	})
 
 	t.Run("help_text_with_error_state", func(t *testing.T) {
@@ -322,8 +321,8 @@ func TestModel_EdgeCases(t *testing.T) {
 		view := model.View()
 
 		// Assert - Ensure help text still appears correctly
-		assert.Contains(t, view, "enter to attach", "Should contain 'enter to attach' in error state")
-		assert.Contains(t, view, "? for help", "Should contain help text in error state")
+		assert.Contains(t, view, "enter: attach", "Should contain 'enter: attach' in error state")
+		assert.Contains(t, view, "?: help", "Should contain help text in error state")
 	})
 }
 
