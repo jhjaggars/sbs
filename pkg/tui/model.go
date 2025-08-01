@@ -111,6 +111,7 @@ func NewModel() Model {
 	}
 
 	tmuxManager := tmux.NewManager()
+	sandboxManager := sandbox.NewManager()
 	return Model{
 		sessions:               []config.SessionMetadata{},
 		cursor:                 0,
@@ -119,8 +120,8 @@ func NewModel() Model {
 		currentRepo:            currentRepo,
 		tmuxManager:            tmuxManager,
 		repoManager:            repoManager,
-		sandboxManager:         sandbox.NewManager(),
-		statusDetector:         status.NewDetector(tmuxManager),
+		sandboxManager:         sandboxManager,
+		statusDetector:         status.NewDetector(tmuxManager, sandboxManager),
 		config:                 cfg,
 		showConfirmationDialog: false,
 		confirmationMessage:    "",

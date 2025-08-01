@@ -20,9 +20,10 @@ func TestStatusTracking_Integration(t *testing.T) {
 	sbsDir := filepath.Join(worktreePath, ".sbs")
 	require.NoError(t, os.MkdirAll(sbsDir, 0755))
 
-	// Create a mock tmux manager
+	// Create mock managers
 	mockTmux := &MockTmuxManager{}
-	detector := NewDetector(mockTmux)
+	mockSandbox := &MockSandboxManager{}
+	detector := NewDetector(mockTmux, mockSandbox)
 
 	// Test 1: Active session (no stop file, tmux session exists)
 	t.Run("active session workflow", func(t *testing.T) {
@@ -115,6 +116,74 @@ func TestStatusTracking_Integration(t *testing.T) {
 		assert.Equal(t, "unknown", status.Status)
 		assert.Equal(t, "unknown", status.TimeDelta)
 		assert.Nil(t, status.LastChange)
+	})
+
+	// Test 5: Sandbox-based stop file detection
+	t.Run("sandbox stop file workflow", func(t *testing.T) {
+		mockTmux.SetSessionExists("work-issue-123", false)
+
+		// Set up sandbox with stop.json file
+		sandboxName := "work-issue-myrepo-123"
+		mockSandbox.SetSandboxExists(sandboxName, true)
+
+		stopTime := time.Now().Add(-10 * time.Minute)
+		stopData := map[string]interface{}{
+			"claude_code_hook": map[string]interface{}{
+				"timestamp":   stopTime.Format(time.RFC3339),
+				"environment": "sandbox",
+			},
+		}
+		data, err := json.Marshal(stopData)
+		require.NoError(t, err)
+		mockSandbox.SetFileContent(sandboxName, ".sbs/stop.json", data)
+
+		session := config.SessionMetadata{
+			IssueNumber:    123,
+			WorktreePath:   worktreePath,
+			TmuxSession:    "work-issue-123",
+			SandboxName:    sandboxName,
+			RepositoryName: "myrepo",
+		}
+
+		status := detector.DetectSessionStatus(session)
+		assert.Equal(t, "stopped", status.Status)
+		assert.Equal(t, "10m ago", status.TimeDelta)
+		assert.NotNil(t, status.LastChange)
+	})
+
+	// Test 6: Sandbox doesn't exist - fallback to direct file access
+	t.Run("sandbox not found fallback workflow", func(t *testing.T) {
+		mockTmux.SetSessionExists("work-issue-123", false)
+
+		// Sandbox doesn't exist
+		sandboxName := "work-issue-myrepo-456"
+		mockSandbox.SetSandboxExists(sandboxName, false)
+
+		// But direct file exists
+		stopFile := filepath.Join(sbsDir, "stop.json")
+		stopTime := time.Now().Add(-15 * time.Minute)
+		stopData := map[string]interface{}{
+			"claude_code_hook": map[string]interface{}{
+				"timestamp":   stopTime.Format(time.RFC3339),
+				"environment": "sandbox",
+			},
+		}
+		data, err := json.Marshal(stopData)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(stopFile, data, 0644))
+
+		session := config.SessionMetadata{
+			IssueNumber:    456,
+			WorktreePath:   worktreePath,
+			TmuxSession:    "work-issue-456",
+			SandboxName:    sandboxName,
+			RepositoryName: "myrepo",
+		}
+
+		status := detector.DetectSessionStatus(session)
+		assert.Equal(t, "stopped", status.Status)
+		assert.Equal(t, "15m ago", status.TimeDelta)
+		assert.NotNil(t, status.LastChange)
 	})
 }
 

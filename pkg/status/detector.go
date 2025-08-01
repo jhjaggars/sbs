@@ -22,17 +22,25 @@ type TmuxManager interface {
 	SessionExists(sessionName string) (bool, error)
 }
 
+// SandboxManager interface for sandbox operations (for dependency injection/testing)
+type SandboxManager interface {
+	ReadFileFromSandbox(sandboxName, filePath string) ([]byte, error)
+	SandboxExists(sandboxName string) (bool, error)
+}
+
 // Detector handles status detection for work sessions
 type Detector struct {
-	tmuxManager   TmuxManager
-	timeFormatter *TimeFormatter
+	tmuxManager    TmuxManager
+	sandboxManager SandboxManager
+	timeFormatter  *TimeFormatter
 }
 
 // NewDetector creates a new status detector
-func NewDetector(tmuxManager TmuxManager) *Detector {
+func NewDetector(tmuxManager TmuxManager, sandboxManager SandboxManager) *Detector {
 	return &Detector{
-		tmuxManager:   tmuxManager,
-		timeFormatter: NewTimeFormatter(),
+		tmuxManager:    tmuxManager,
+		sandboxManager: sandboxManager,
+		timeFormatter:  NewTimeFormatter(),
 	}
 }
 
@@ -47,9 +55,21 @@ func (d *Detector) DetectSessionStatus(session config.SessionMetadata) SessionSt
 		}
 	}
 
-	// Check for stop.json file in worktree/.sbs/
-	stopFilePath := filepath.Join(session.WorktreePath, ".sbs", "stop.json")
-	stopTime, err := d.ParseStopJsonFile(stopFilePath)
+	// Check for stop.json file in sandbox/.sbs/ first, then fallback to direct file access
+	var stopTime time.Time
+	var err error
+	if session.SandboxName != "" {
+		stopTime, err = d.ParseStopJsonFromSandbox(session.SandboxName, ".sbs/stop.json")
+		// If sandbox reading fails, fallback to direct file access
+		if err != nil {
+			stopFilePath := filepath.Join(session.WorktreePath, ".sbs", "stop.json")
+			stopTime, err = d.ParseStopJsonFile(stopFilePath)
+		}
+	} else {
+		// No sandbox name available, use direct file access (for backward compatibility)
+		stopFilePath := filepath.Join(session.WorktreePath, ".sbs", "stop.json")
+		stopTime, err = d.ParseStopJsonFile(stopFilePath)
+	}
 
 	now := time.Now()
 
@@ -103,6 +123,31 @@ func (d *Detector) DetectSessionStatus(session config.SessionMetadata) SessionSt
 // ParseStopJsonFile parses a stop.json file and extracts the timestamp
 func (d *Detector) ParseStopJsonFile(filePath string) (time.Time, error) {
 	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if len(data) == 0 {
+		return time.Time{}, fmt.Errorf("empty stop.json file")
+	}
+
+	var stopData map[string]interface{}
+	if err := json.Unmarshal(data, &stopData); err != nil {
+		return time.Time{}, fmt.Errorf("invalid JSON in stop.json: %w", err)
+	}
+
+	// Try to extract timestamp from different formats
+	timestamp := extractTimestamp(stopData)
+	if timestamp.IsZero() {
+		return time.Time{}, fmt.Errorf("no valid timestamp found in stop.json")
+	}
+
+	return timestamp, nil
+}
+
+// ParseStopJsonFromSandbox parses a stop.json file from within a sandbox and extracts the timestamp
+func (d *Detector) ParseStopJsonFromSandbox(sandboxName, filePath string) (time.Time, error) {
+	data, err := d.sandboxManager.ReadFileFromSandbox(sandboxName, filePath)
 	if err != nil {
 		return time.Time{}, err
 	}

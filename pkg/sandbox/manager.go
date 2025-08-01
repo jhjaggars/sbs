@@ -171,6 +171,27 @@ func (m *Manager) runSandboxCommandInteractive(args []string) error {
 	return nil
 }
 
+// ReadFileFromSandbox reads a file from within a sandbox using 'sandbox --name <name> cat <path>'
+func (m *Manager) ReadFileFromSandbox(sandboxName, filePath string) ([]byte, error) {
+	// Check if sandbox exists first
+	exists, err := m.SandboxExists(sandboxName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if sandbox exists: %w", err)
+	}
+
+	if !exists {
+		return nil, fmt.Errorf("sandbox %s does not exist", sandboxName)
+	}
+
+	// Execute sandbox command to read file
+	output, err := m.runSandboxCommand([]string{"--name", sandboxName, "cat", filePath})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file %s from sandbox %s: %w", filePath, sandboxName, err)
+	}
+
+	return output, nil
+}
+
 // getExitCode extracts exit code from exec.Cmd
 func getExitCode(cmd *exec.Cmd) int {
 	if cmd.ProcessState != nil {

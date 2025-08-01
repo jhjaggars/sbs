@@ -2,6 +2,7 @@ package status
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -87,13 +88,14 @@ func TestStatusDetector_DetectSessionStatus(t *testing.T) {
 			tmpDir := t.TempDir()
 			worktreePath := tt.setupFunc(t, tmpDir)
 
-			// Create mock tmux manager
+			// Create mock managers
 			mockTmux := &MockTmuxManager{}
+			mockSandbox := &MockSandboxManager{}
 			if tt.tmuxSession != "" {
 				mockTmux.SetSessionExists(tt.tmuxSession, true)
 			}
 
-			detector := NewDetector(mockTmux)
+			detector := NewDetector(mockTmux, mockSandbox)
 			session := config.SessionMetadata{
 				IssueNumber:  123,
 				WorktreePath: worktreePath,
@@ -161,7 +163,7 @@ func TestStatusDetector_ParseStopJsonFile(t *testing.T) {
 			tmpFile := filepath.Join(t.TempDir(), "stop.json")
 			require.NoError(t, os.WriteFile(tmpFile, []byte(tt.content), 0644))
 
-			detector := NewDetector(&MockTmuxManager{})
+			detector := NewDetector(&MockTmuxManager{}, &MockSandboxManager{})
 			timestamp, err := detector.ParseStopJsonFile(tmpFile)
 
 			if tt.expectError {
@@ -212,7 +214,7 @@ func TestStatusDetector_CalculateTimeDelta(t *testing.T) {
 		},
 	}
 
-	detector := NewDetector(&MockTmuxManager{})
+	detector := NewDetector(&MockTmuxManager{}, &MockSandboxManager{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := detector.CalculateTimeDelta(tt.timestamp)
@@ -232,7 +234,7 @@ func TestStatusDetector_HandleMissingStopFile(t *testing.T) {
 
 	mockTmux := &MockTmuxManager{}
 	mockTmux.SetSessionExists("work-issue-123", true)
-	detector := NewDetector(mockTmux)
+	detector := NewDetector(mockTmux, &MockSandboxManager{})
 	session := config.SessionMetadata{
 		IssueNumber:  123,
 		WorktreePath: worktreePath,
@@ -263,7 +265,7 @@ func TestStatusDetector_HandlePermissionErrors(t *testing.T) {
 	require.NoError(t, os.Chmod(stopFile, 0000))
 	defer os.Chmod(stopFile, 0644) // Cleanup
 
-	detector := NewDetector(&MockTmuxManager{})
+	detector := NewDetector(&MockTmuxManager{}, &MockSandboxManager{})
 	session := config.SessionMetadata{
 		IssueNumber:  123,
 		WorktreePath: worktreePath,
@@ -294,4 +296,56 @@ func (m *MockTmuxManager) SetSessionExists(sessionName string, exists bool) {
 		m.sessions = make(map[string]bool)
 	}
 	m.sessions[sessionName] = exists
+}
+
+// MockSandboxManager for testing
+type MockSandboxManager struct {
+	sandboxFiles  map[string]map[string][]byte // sandboxName -> filePath -> fileContent
+	sandboxExists map[string]bool              // sandboxName -> exists
+}
+
+func (m *MockSandboxManager) ReadFileFromSandbox(sandboxName, filePath string) ([]byte, error) {
+	if m.sandboxFiles == nil {
+		return nil, fmt.Errorf("sandbox %s does not exist", sandboxName)
+	}
+
+	if !m.sandboxExists[sandboxName] {
+		return nil, fmt.Errorf("sandbox %s does not exist", sandboxName)
+	}
+
+	files, ok := m.sandboxFiles[sandboxName]
+	if !ok {
+		return nil, fmt.Errorf("file %s not found in sandbox %s", filePath, sandboxName)
+	}
+
+	content, ok := files[filePath]
+	if !ok {
+		return nil, fmt.Errorf("file %s not found in sandbox %s", filePath, sandboxName)
+	}
+
+	return content, nil
+}
+
+func (m *MockSandboxManager) SandboxExists(sandboxName string) (bool, error) {
+	if m.sandboxExists == nil {
+		return false, nil
+	}
+	return m.sandboxExists[sandboxName], nil
+}
+
+func (m *MockSandboxManager) SetSandboxExists(sandboxName string, exists bool) {
+	if m.sandboxExists == nil {
+		m.sandboxExists = make(map[string]bool)
+	}
+	m.sandboxExists[sandboxName] = exists
+}
+
+func (m *MockSandboxManager) SetFileContent(sandboxName, filePath string, content []byte) {
+	if m.sandboxFiles == nil {
+		m.sandboxFiles = make(map[string]map[string][]byte)
+	}
+	if m.sandboxFiles[sandboxName] == nil {
+		m.sandboxFiles[sandboxName] = make(map[string][]byte)
+	}
+	m.sandboxFiles[sandboxName][filePath] = content
 }
