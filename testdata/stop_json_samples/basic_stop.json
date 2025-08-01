@@ -1,0 +1,15 @@
+{
+  "claude_code_hook": {
+    "timestamp": "2025-08-01T12:30:45Z",
+    "environment": "sandbox",
+    "project_directory": "/work",
+    "hook_script": "/home/user/claude-code-stop-hook.sh",
+    "sandbox_detection": true
+  },
+  "hook_data": {
+    "session_id": "work-issue-123",
+    "tool_executions": 15,
+    "last_tool": "Edit",
+    "project_files_modified": 3
+  }
+}

@@ -22,6 +22,12 @@ type Config struct {
 	CommandLogging  bool   `json:"command_logging,omitempty"`   // Enable/disable command logging
 	CommandLogLevel string `json:"command_log_level,omitempty"` // Log level: debug, info, error
 	CommandLogPath  string `json:"command_log_path,omitempty"`  // Optional log file path
+
+	// Status tracking configuration
+	StatusTracking            bool `json:"status_tracking,omitempty"`                 // Enable/disable status tracking
+	StatusRefreshIntervalSecs int  `json:"status_refresh_interval_seconds,omitempty"` // Refresh interval in seconds (default: 60)
+	StatusMaxFileSizeBytes    int  `json:"status_max_file_size_bytes,omitempty"`      // Maximum stop.json file size (default: 1MB)
+	StatusTimeoutSeconds      int  `json:"status_timeout_seconds,omitempty"`          // Timeout for status operations (default: 5)
 }
 
 // ResourceCreationEntry tracks the creation of individual resources during session setup
@@ -58,10 +64,14 @@ type SessionMetadata struct {
 func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	return &Config{
-		WorktreeBasePath: filepath.Join(homeDir, ".work-issue-worktrees"),
-		GitHubToken:      os.Getenv("GITHUB_TOKEN"),
-		WorkIssueScript:  filepath.Join(homeDir, "code/work-issue/work-issue.sh"),
-		RepoPath:         ".", // Current directory by default
+		WorktreeBasePath:          filepath.Join(homeDir, ".work-issue-worktrees"),
+		GitHubToken:               os.Getenv("GITHUB_TOKEN"),
+		WorkIssueScript:           filepath.Join(homeDir, "code/work-issue/work-issue.sh"),
+		RepoPath:                  ".",     // Current directory by default
+		StatusTracking:            true,    // Enable status tracking by default
+		StatusRefreshIntervalSecs: 60,      // Default to 60 seconds
+		StatusMaxFileSizeBytes:    1048576, // Default to 1MB
+		StatusTimeoutSeconds:      5,       // Default to 5 seconds
 	}
 }
 
@@ -181,6 +191,22 @@ func MergeConfig(base, override *Config) *Config {
 		merged.CommandLogPath = override.CommandLogPath
 	}
 
+	// Status tracking configuration
+	// StatusTracking is a boolean, we need to check if it was explicitly set
+	// For now, we'll assume any non-zero value in override means it was explicitly set
+	if override.StatusTracking != merged.StatusTracking {
+		merged.StatusTracking = override.StatusTracking
+	}
+	if override.StatusRefreshIntervalSecs > 0 {
+		merged.StatusRefreshIntervalSecs = override.StatusRefreshIntervalSecs
+	}
+	if override.StatusMaxFileSizeBytes > 0 {
+		merged.StatusMaxFileSizeBytes = override.StatusMaxFileSizeBytes
+	}
+	if override.StatusTimeoutSeconds > 0 {
+		merged.StatusTimeoutSeconds = override.StatusTimeoutSeconds
+	}
+
 	return &merged
 }
 
@@ -290,6 +316,19 @@ func validateConfig(config *Config) error {
 		}
 		if !validLevels[config.CommandLogLevel] {
 			errors = append(errors, "command_log_level must be one of: debug, info, error")
+		}
+	}
+
+	// Validate status tracking configuration if enabled
+	if config.StatusTracking {
+		if config.StatusRefreshIntervalSecs < 5 || config.StatusRefreshIntervalSecs > 600 {
+			errors = append(errors, "status_refresh_interval_seconds must be between 5 and 600")
+		}
+		if config.StatusMaxFileSizeBytes < 1024 || config.StatusMaxFileSizeBytes > 10*1024*1024 {
+			errors = append(errors, "status_max_file_size_bytes must be between 1KB and 10MB")
+		}
+		if config.StatusTimeoutSeconds < 1 || config.StatusTimeoutSeconds > 30 {
+			errors = append(errors, "status_timeout_seconds must be between 1 and 30")
 		}
 	}
 
