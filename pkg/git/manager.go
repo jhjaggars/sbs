@@ -7,9 +7,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"sbs/pkg/cmdlog"
 )
 
 type Manager struct {
@@ -280,4 +282,50 @@ func (m *Manager) cleanupInvalidWorktree(worktreePath string) error {
 	}
 
 	return nil
+}
+
+// runGitCommand executes a git command with logging in the repository directory
+func (m *Manager) runGitCommand(args []string) ([]byte, error) {
+	ctx := cmdlog.LogCommandGlobal("git", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = m.repoPath
+	start := time.Now()
+	output, err := cmd.CombinedOutput()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return output, err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return output, nil
+}
+
+// runGitCommandRun executes a git command without capturing output, with logging
+func (m *Manager) runGitCommandRun(args []string) error {
+	ctx := cmdlog.LogCommandGlobal("git", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = m.repoPath
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return nil
+}
+
+// getExitCode extracts exit code from exec.Cmd
+func getExitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState != nil {
+		return cmd.ProcessState.ExitCode()
+	}
+	return -1
 }

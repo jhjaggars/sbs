@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
+
+	"sbs/pkg/cmdlog"
 )
 
 type Manager struct{}
@@ -24,8 +27,7 @@ func (m *Manager) GetRepositorySandboxName(repoName string, issueNumber int) str
 
 // SandboxExists checks if a sandbox with the given name exists
 func (m *Manager) SandboxExists(sandboxName string) (bool, error) {
-	cmd := exec.Command("sandbox", "list")
-	output, err := cmd.Output()
+	output, err := m.runSandboxCommand([]string{"list"})
 	if err != nil {
 		// If sandbox command fails, assume sandboxes don't exist
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
@@ -58,8 +60,7 @@ func (m *Manager) DeleteSandbox(sandboxName string) error {
 		return nil
 	}
 
-	cmd := exec.Command("sandbox", "delete", sandboxName)
-	if err := cmd.Run(); err != nil {
+	if err := m.runSandboxCommandRun([]string{"delete", sandboxName}); err != nil {
 		return fmt.Errorf("failed to delete sandbox %s: %w", sandboxName, err)
 	}
 
@@ -68,8 +69,7 @@ func (m *Manager) DeleteSandbox(sandboxName string) error {
 
 // ListSandboxes returns all work-issue sandboxes
 func (m *Manager) ListSandboxes() ([]string, error) {
-	cmd := exec.Command("sandbox", "list")
-	output, err := cmd.Output()
+	output, err := m.runSandboxCommand([]string{"list"})
 	if err != nil {
 		// If sandbox command fails, return empty list
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
@@ -96,9 +96,62 @@ func (m *Manager) ListSandboxes() ([]string, error) {
 
 // CheckSandboxInstalled verifies that the sandbox command is available
 func CheckSandboxInstalled() error {
+	ctx := cmdlog.LogCommandGlobal("sandbox", []string{"--help"}, cmdlog.GetCaller())
+
 	cmd := exec.Command("sandbox", "--help")
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
 		return fmt.Errorf("sandbox command not found. Please ensure sandbox is installed and in PATH")
 	}
+
+	ctx.LogCompletion(true, 0, "", duration)
 	return nil
+}
+
+// runSandboxCommand executes a sandbox command with logging
+func (m *Manager) runSandboxCommand(args []string) ([]byte, error) {
+	ctx := cmdlog.LogCommandGlobal("sandbox", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("sandbox", args...)
+	start := time.Now()
+	output, err := cmd.Output()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return output, err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return output, nil
+}
+
+// runSandboxCommandRun executes a sandbox command without capturing output, with logging
+func (m *Manager) runSandboxCommandRun(args []string) error {
+	ctx := cmdlog.LogCommandGlobal("sandbox", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("sandbox", args...)
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return nil
+}
+
+// getExitCode extracts exit code from exec.Cmd
+func getExitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState != nil {
+		return cmd.ProcessState.ExitCode()
+	}
+	return -1
 }

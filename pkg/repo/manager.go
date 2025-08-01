@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/go-git/go-git/v5"
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
+	"sbs/pkg/cmdlog"
 )
 
 type Repository struct {
@@ -100,9 +102,7 @@ func (m *Manager) extractRepositoryName(repoRoot string) string {
 
 // extractNameFromRemote extracts repository name from git remote URL
 func (m *Manager) extractNameFromRemote(repoRoot string) string {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = repoRoot
-	output, err := cmd.Output()
+	output, err := m.runGitCommand(repoRoot, []string{"remote", "get-url", "origin"})
 	if err != nil {
 		return ""
 	}
@@ -133,9 +133,7 @@ func (m *Manager) extractNameFromRemote(repoRoot string) string {
 
 // getRemoteURL gets the git remote URL
 func (m *Manager) getRemoteURL(repoRoot string) string {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = repoRoot
-	output, err := cmd.Output()
+	output, err := m.runGitCommand(repoRoot, []string{"remote", "get-url", "origin"})
 	if err != nil {
 		return ""
 	}
@@ -210,4 +208,31 @@ func (m *Manager) normalizeUnicode(input string) string {
 		return input
 	}
 	return result
+}
+
+// runGitCommand executes a git command with logging in a specific directory
+func (m *Manager) runGitCommand(dir string, args []string) ([]byte, error) {
+	ctx := cmdlog.LogCommandGlobal("git", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	start := time.Now()
+	output, err := cmd.Output()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return output, err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return output, nil
+}
+
+// getExitCode extracts exit code from exec.Cmd
+func getExitCode(cmd *exec.Cmd) int {
+	if cmd.ProcessState != nil {
+		return cmd.ProcessState.ExitCode()
+	}
+	return -1
 }
