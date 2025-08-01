@@ -43,7 +43,7 @@ func TestSandboxFailureModes(t *testing.T) {
 				// Create a mock sandbox that simulates permission denied
 				return createMockSandbox("sandbox", 126, "permission denied")
 			},
-			expectedError:  "sandbox command not found", // Current implementation maps all errors to this
+			expectedError:  "sandbox command found but not executable", // Now differentiates permission errors
 			expectedAction: "check permissions and installation",
 			testFunc: func() error {
 				return CheckSandboxInstalled()
@@ -55,7 +55,7 @@ func TestSandboxFailureModes(t *testing.T) {
 				// Create a mock sandbox that fails with generic error
 				return createMockSandbox("sandbox", 1, "unknown error")
 			},
-			expectedError:  "sandbox command not found", // Current implementation maps all errors to this
+			expectedError:  "sandbox command failed with exit code 1", // Now differentiates general failures
 			expectedAction: "check sandbox installation",
 			testFunc: func() error {
 				return CheckSandboxInstalled()
@@ -219,8 +219,8 @@ func TestSandboxRuntimeIssues(t *testing.T) {
 		err := CheckSandboxInstalled()
 
 		if err != nil {
-			// Current implementation maps all failures to "command not found"
-			assert.Contains(t, err.Error(), "sandbox command not found")
+			// Now differentiates permission errors
+			assert.Contains(t, err.Error(), "sandbox command found but not executable")
 		}
 	})
 }
@@ -243,7 +243,7 @@ func TestSandboxVersionCompatibility(t *testing.T) {
 		err := CheckSandboxInstalled()
 
 		if err != nil {
-			assert.Contains(t, err.Error(), "sandbox command not found")
+			assert.Contains(t, err.Error(), "sandbox command failed with exit code 1")
 		}
 	})
 

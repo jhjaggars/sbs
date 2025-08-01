@@ -105,8 +105,28 @@ func CheckSandboxInstalled() error {
 	duration := time.Since(start)
 
 	if err != nil {
-		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
-		return fmt.Errorf("sandbox command not found. Please ensure sandbox is installed and in PATH")
+		exitCode := getExitCode(cmd)
+		ctx.LogCompletion(false, exitCode, err.Error(), duration)
+
+		// Differentiate between different types of failures
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			switch exitCode {
+			case 126:
+				return fmt.Errorf("sandbox command found but not executable. Please check file permissions")
+			case 127:
+				return fmt.Errorf("sandbox command not found. Please ensure sandbox is installed and in PATH")
+			default:
+				return fmt.Errorf("sandbox command failed with exit code %d: %s. Please check sandbox installation", exitCode, exitErr.Stderr)
+			}
+		}
+
+		// Handle other types of errors (e.g., exec.Error for command not found)
+		if strings.Contains(err.Error(), "no such file or directory") || strings.Contains(err.Error(), "executable file not found") {
+			return fmt.Errorf("sandbox command not found. Please ensure sandbox is installed and in PATH")
+		}
+
+		// Generic fallback for other errors
+		return fmt.Errorf("failed to execute sandbox command: %w. Please check sandbox installation", err)
 	}
 
 	ctx.LogCompletion(true, 0, "", duration)

@@ -29,13 +29,36 @@ func TestCheckSandboxInstalled_ErrorMessages(t *testing.T) {
 		},
 		{
 			name:          "command_not_found",
-			sandboxBinary: "nonexistent-sandbox-command-12345",
+			sandboxBinary: "sandbox",
 			mockSetup: func() func() {
-				// Create a mock script that simulates command not found
-				return createMockSandbox("nonexistent-sandbox-command-12345", 127, "command not found")
+				// Create a mock script that simulates command not found (exit code 127)
+				return createMockSandbox("sandbox", 127, "command not found")
 			},
 			expectedError: "sandbox command not found. Please ensure sandbox is installed and in PATH",
 			errorContains: []string{"sandbox command not found", "installed", "PATH"},
+			shouldSucceed: false,
+		},
+		{
+			name:          "permission_denied",
+			sandboxBinary: "sandbox",
+			mockSetup: func() func() {
+				// Create a mock script that simulates permission denied (exit code 126)
+				return createMockSandbox("sandbox", 126, "permission denied")
+			},
+			expectedError: "sandbox command found but not executable. Please check file permissions",
+			errorContains: []string{"not executable", "permissions"},
+			shouldSucceed: false,
+		},
+		{
+			name:          "other_failure",
+			sandboxBinary: "sandbox",
+			mockSetup: func() func() {
+				// Create a mock script that simulates other failure (exit code 1)
+				return createMockSandbox("sandbox", 1, "general error")
+			},
+			expectedError: "sandbox command failed with exit code 1",
+			errorContains: []string{"failed with exit code", "check sandbox installation"},
+			shouldSucceed: false,
 		},
 	}
 
@@ -51,13 +74,7 @@ func TestCheckSandboxInstalled_ErrorMessages(t *testing.T) {
 			cleanup := tt.mockSetup()
 			defer cleanup()
 
-			var err error
-			if tt.name == "command_not_found" {
-				// For command not found test, we expect error regardless
-				err = fmt.Errorf("sandbox command not found. Please ensure sandbox is installed and in PATH")
-			} else {
-				err = CheckSandboxInstalled()
-			}
+			err := CheckSandboxInstalled()
 
 			if tt.shouldSucceed {
 				assert.NoError(t, err)

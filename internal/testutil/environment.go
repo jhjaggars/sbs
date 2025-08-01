@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -105,7 +106,7 @@ func CreateMockCommand(t *testing.T, commandName string, exitCode int, output st
 		scriptContent += "echo \"" + output + "\"\n"
 	}
 
-	scriptContent += "exit " + string(rune(exitCode+'0')) + "\n"
+	scriptContent += fmt.Sprintf("exit %d\n", exitCode)
 
 	if err := os.WriteFile(mockScript, []byte(scriptContent), 0755); err != nil {
 		os.RemoveAll(tempDir)
