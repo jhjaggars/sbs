@@ -6,6 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SBS (Sandbox Sessions) is a Go CLI application that orchestrates GitHub issue work environments with automatic git worktree and tmux session management. It creates isolated development environments for each GitHub issue.
 
+### System Requirements
+
+**IMPORTANT**: SBS requires the `sandbox` command to be installed and available in your PATH. This is a mandatory dependency for all SBS operations.
+
+**Required Tools:**
+- `sandbox` - Container runtime for isolated development environments (MANDATORY)
+- `tmux` - Terminal multiplexer for session management
+- `git` - Version control system with worktree support
+- `gh` - GitHub CLI for issue metadata (optional, falls back to GITHUB_TOKEN)
+
+**Installation Verification:**
+```bash
+# Verify all required tools are available
+sandbox --help     # Must be available - no alternatives
+tmux -V           # Terminal multiplexer
+git --version     # Version control
+gh --version      # GitHub CLI (optional)
+```
+
+If `sandbox` is not installed, SBS will fail with clear error messages. There are no fallback modes or alternative container runtimes supported.
+
 ## Common Development Commands
 
 ### Build and Install
@@ -92,7 +113,9 @@ sbs --help                             # Show help for any command
 
 ### Sandbox Integration
 
-SBS integrates with the `sandbox` command to provide isolated development environments. Each work session creates a named sandbox that contains the development environment.
+SBS **requires** the `sandbox` command to provide isolated development environments. This is a mandatory dependency - SBS will not function without it. Each work session creates a named sandbox that contains the development environment.
+
+**Critical Requirement**: The `sandbox` command must be installed and available in your PATH before using any SBS commands. There are no fallback modes or alternative container runtimes supported.
 
 #### Sandbox Naming Convention
 ```bash
@@ -299,9 +322,40 @@ The hook creates `.sbs/stop.json` with structure like:
 - **Sandbox Access**: Use `sandbox --name [name] ls .sbs/` to verify hook directory exists
 
 ### Dependencies
+- **`sandbox` command for containerized execution (MANDATORY)**
 - Git with worktree support
 - tmux for session management
 - GitHub CLI (`gh`) for issue metadata
-- `sandbox` command for containerized execution
 - `work-issue.sh` script integration
 - `jq` (optional, for JSON formatting in hooks)
+
+### Troubleshooting Sandbox Issues
+
+If you encounter sandbox-related errors:
+
+1. **"sandbox command not found"**
+   ```bash
+   # Verify sandbox is installed
+   which sandbox
+   sandbox --help
+   
+   # Check PATH includes sandbox location
+   echo $PATH
+   ```
+
+2. **Permission denied errors**
+   ```bash
+   # Check sandbox executable permissions
+   ls -la $(which sandbox)
+   
+   # Ensure sandbox is executable
+   chmod +x $(which sandbox)
+   ```
+
+3. **Sandbox validation failure**
+   ```bash
+   # Run SBS tool validation
+   sbs start --verbose  # Will show validation details
+   ```
+
+**Important**: SBS will fail gracefully with clear error messages if sandbox is not available. There are no workarounds or alternative container runtimes - sandbox is mandatory for all operations.
