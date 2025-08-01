@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"sbs/pkg/config"
@@ -13,30 +12,30 @@ import (
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all active work sessions",
-	Long: `Display an interactive list of all active work sessions.
-Use arrow keys or j/k to navigate, enter to attach to a session.`,
+	Short: "List all active work sessions in plain text format",
+	Long: `Display a plain text list of all active work sessions.
+Shows session details in a formatted table for easy parsing and scripting.
+Use the bare 'sbs' command to launch the interactive TUI instead.`,
 	RunE: runList,
 }
 
 func init() {
 	rootCmd.AddCommand(listCmd)
-	listCmd.Flags().BoolP("plain", "p", false, "Show plain text output instead of interactive TUI")
+	listCmd.Flags().BoolP("plain", "p", false, "Show plain text output (default behavior, kept for backward compatibility)")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	plain, _ := cmd.Flags().GetBool("plain")
 
-	if plain {
+	// Default behavior is now plain text output
+	// The --plain flag is kept for backward compatibility but is redundant
+	if !plain {
+		// Always show plain text output (--plain flag is now redundant but kept for compatibility)
 		return runPlainList()
 	}
 
-	// Launch interactive TUI
-	model := tui.NewModel()
-	program := tea.NewProgram(model, tea.WithAltScreen())
-
-	_, err := program.Run()
-	return err
+	// Still support --plain explicitly for backward compatibility
+	return runPlainList()
 }
 
 func runPlainList() error {
