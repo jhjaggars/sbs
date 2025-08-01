@@ -2,6 +2,7 @@ package sandbox
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ func (m *Manager) DeleteSandbox(sandboxName string) error {
 		return nil
 	}
 
-	if err := m.runSandboxCommandRun([]string{"delete", sandboxName}); err != nil {
+	if err := m.runSandboxCommandInteractive([]string{"delete", sandboxName}); err != nil {
 		return fmt.Errorf("failed to delete sandbox %s: %w", sandboxName, err)
 	}
 
@@ -135,6 +136,28 @@ func (m *Manager) runSandboxCommandRun(args []string) error {
 	ctx := cmdlog.LogCommandGlobal("sandbox", args, cmdlog.GetCaller())
 
 	cmd := exec.Command("sandbox", args...)
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+
+	if err != nil {
+		ctx.LogCompletion(false, getExitCode(cmd), err.Error(), duration)
+		return err
+	}
+
+	ctx.LogCompletion(true, 0, "", duration)
+	return nil
+}
+
+// runSandboxCommandInteractive executes a sandbox command with interactive input/output, with logging
+func (m *Manager) runSandboxCommandInteractive(args []string) error {
+	ctx := cmdlog.LogCommandGlobal("sandbox", args, cmdlog.GetCaller())
+
+	cmd := exec.Command("sandbox", args...)
+	cmd.Stdin = os.Stdin   // Connect to user's input
+	cmd.Stdout = os.Stdout // Connect to user's output
+	cmd.Stderr = os.Stderr // Connect to user's errors
+
 	start := time.Now()
 	err := cmd.Run()
 	duration := time.Since(start)
