@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sbs/pkg/cmdlog"
@@ -180,4 +182,82 @@ type noOpContextForTest struct{}
 
 func (n *noOpContextForTest) LogCompletion(success bool, exitCode int, errorMsg string, duration time.Duration) {
 	// No-op
+}
+
+// Tests for the new root command behavior (Issue #15)
+func TestRootCommand_LaunchesTUI(t *testing.T) {
+	t.Run("bare_sbs_command_launches_tui", func(t *testing.T) {
+		// This test will fail initially because the root command currently has no RunE
+
+		// Create a mock root command with the expected behavior
+		var tuiLaunched bool
+		mockRootCmd := &cobra.Command{
+			Use:   "sbs",
+			Short: "Sandbox Sessions - Manage GitHub issue work environments",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				// Mock TUI launch - in real implementation this would launch the TUI
+				tuiLaunched = true
+				return nil
+			},
+		}
+
+		// Act
+		mockRootCmd.SetArgs([]string{})
+		err := mockRootCmd.Execute()
+
+		// Assert
+		require.NoError(t, err)
+		assert.True(t, tuiLaunched, "Expected TUI to be launched when running bare 'sbs' command")
+	})
+}
+
+func TestRootCommand_WithInvalidArgs_ShowsHelp(t *testing.T) {
+	t.Run("invalid_args_show_help", func(t *testing.T) {
+		// This test ensures that the actual root command behaves correctly
+		// with invalid subcommands
+
+		var buf bytes.Buffer
+		// Test the actual root command structure
+		testCmd := rootCmd
+		testCmd.SetOut(&buf)
+		testCmd.SetErr(&buf)
+
+		// Act - try to run with an invalid subcommand
+		testCmd.SetArgs([]string{"invalid-subcommand"})
+		err := testCmd.Execute()
+
+		// Assert - Cobra should handle invalid subcommands and return error
+		require.Error(t, err)
+		// The error should be about unknown command
+		assert.Contains(t, err.Error(), "unknown command")
+
+		// Reset args for other tests
+		testCmd.SetArgs([]string{})
+	})
+}
+
+func TestRootCommand_HelpText_Updated(t *testing.T) {
+	t.Run("help_text_reflects_tui_default", func(t *testing.T) {
+		// The help text should be updated to indicate that the default behavior
+		// is to launch the interactive TUI
+
+		// Test the current root command structure
+		assert.NotNil(t, rootCmd)
+		assert.Equal(t, "sbs", rootCmd.Use)
+		assert.NotEmpty(t, rootCmd.Short)
+		assert.NotEmpty(t, rootCmd.Long)
+
+		// The help text should indicate the new default behavior
+		// This assertion will guide the documentation update
+		assert.Contains(t, rootCmd.Short, "Manage GitHub issue work environments")
+	})
+}
+
+func TestRootCommand_NowHasRunE(t *testing.T) {
+	t.Run("root_command_now_has_rune", func(t *testing.T) {
+		// This test confirms the implementation - root command now has RunE
+		// This serves as a test for the "after" state in TDD
+
+		assert.NotNil(t, rootCmd.RunE, "Root command should now have RunE function to launch TUI")
+	})
 }

@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"sbs/pkg/cmdlog"
 	"sbs/pkg/config"
+	"sbs/pkg/tui"
 	"sbs/pkg/validation"
 )
 
@@ -19,7 +21,10 @@ It automatically handles:
 - Tmux session management
 - Integration with work-issue.sh script
 
-Each issue gets its own branch, worktree, and tmux session for organized development.`,
+Each issue gets its own branch, worktree, and tmux session for organized development.
+
+When run without arguments, launches an interactive TUI to manage sessions.`,
+	RunE: runRoot,
 }
 
 var cfg *config.Config
@@ -27,6 +32,15 @@ var verbose bool
 
 func Execute() error {
 	return rootCmd.Execute()
+}
+
+func runRoot(cmd *cobra.Command, args []string) error {
+	// Launch interactive TUI (same as current sbs list behavior)
+	model := tui.NewModel()
+	program := tea.NewProgram(model, tea.WithAltScreen())
+
+	_, err := program.Run()
+	return err
 }
 
 func init() {
