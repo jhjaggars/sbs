@@ -152,9 +152,9 @@ else
   # If SBS_TITLE is not set, try to get it from tmux environment
   # This handles cases where the variable was set via 'tmux set-environment'
   if command -v tmux >/dev/null 2>&1; then
-    TMUX_SBS_TITLE=$(tmux show-environment SBS_TITLE 2>/dev/null | cut -d= -f2- 2>/dev/null || echo "")
-    if [ -n "$TMUX_SBS_TITLE" ]; then
-      export SBS_TITLE="$TMUX_SBS_TITLE"
+    TMUX_OUTPUT=$(tmux show-environment SBS_TITLE 2>/dev/null || echo "")
+    if [[ "$TMUX_OUTPUT" =~ ^SBS_TITLE=(.*)$ ]]; then
+      export SBS_TITLE="${BASH_REMATCH[1]}"
     fi
   fi
 fi
