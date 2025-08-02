@@ -3,7 +3,6 @@ package inputsource
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -46,47 +45,17 @@ func (w *WorkItem) GetBranchName() string {
 	return fmt.Sprintf("issue-%s-%s-%s", w.Source, w.ID, titleSlug)
 }
 
-// GetLegacyBranchName returns the branch name for backward compatibility
-// For GitHub sources from legacy input, omits the source prefix
-// For non-GitHub sources, same as GetBranchName()
-func (w *WorkItem) GetLegacyBranchName() string {
-	if w.Source == "github" {
-		titleSlug := createTitleSlug(w.Title)
-		if titleSlug == "" {
-			return fmt.Sprintf("issue-%s", w.ID)
-		}
-		return fmt.Sprintf("issue-%s-%s", w.ID, titleSlug)
-	}
-	return w.GetBranchName()
-}
-
 // ParseWorkItemID parses a work item ID and returns a WorkItem
-// Supports both namespaced format "source:id" and legacy numeric format
+// Requires namespaced format "source:id" (e.g., "github:123", "test:quick")
 func ParseWorkItemID(input string) (*WorkItem, error) {
 	if input == "" {
 		return nil, fmt.Errorf("work item ID cannot be empty")
 	}
 
-	// Handle legacy numeric format (including #123 format)
-	if IsLegacyFormat(input) {
-		// Remove # prefix if present
-		cleanInput := strings.TrimPrefix(input, "#")
-
-		// Validate it's a number
-		if _, err := strconv.Atoi(cleanInput); err != nil {
-			return nil, fmt.Errorf("invalid legacy issue number: %s", input)
-		}
-
-		return &WorkItem{
-			Source: "github", // Legacy format defaults to GitHub
-			ID:     cleanInput,
-		}, nil
-	}
-
 	// Parse namespaced format "source:id"
 	parts := strings.Split(input, ":")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid work item ID format: %s (expected 'source:id' or numeric)", input)
+		return nil, fmt.Errorf("invalid work item ID format: %s (expected 'source:id' format, e.g., 'github:123' or 'test:quick')", input)
 	}
 
 	source := strings.TrimSpace(parts[0])
@@ -108,16 +77,6 @@ func ParseWorkItemID(input string) (*WorkItem, error) {
 		Source: source,
 		ID:     id,
 	}, nil
-}
-
-// IsLegacyFormat checks if the input is in legacy numeric format
-func IsLegacyFormat(input string) bool {
-	// Remove # prefix if present
-	cleanInput := strings.TrimPrefix(input, "#")
-
-	// Check if it's a pure number
-	_, err := strconv.Atoi(cleanInput)
-	return err == nil
 }
 
 // createTitleSlug creates a URL-safe slug from a title

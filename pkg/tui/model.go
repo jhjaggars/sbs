@@ -484,7 +484,7 @@ func (m Model) View() string {
 			var row string
 			if m.viewMode == ViewModeGlobal {
 				row = FormatGlobalViewRow(widths,
-					session.IssueNumber,
+					session.NamespacedID,
 					session.IssueTitle,
 					session.RepositoryName,
 					session.Branch,
@@ -493,7 +493,7 @@ func (m Model) View() string {
 				)
 			} else {
 				row = FormatRepositoryViewRow(widths,
-					session.IssueNumber,
+					session.NamespacedID,
 					session.IssueTitle,
 					session.Branch,
 					FormatStatus(sessionStatus.Status),
@@ -717,7 +717,7 @@ func (m Model) stopSelectedSession() tea.Cmd {
 		// Stop sandbox if it exists
 		sandboxName := session.SandboxName
 		if sandboxName == "" {
-			sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+			return stopSessionMsg{err: fmt.Errorf("session missing sandbox name"), success: false}
 		}
 
 		sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
@@ -748,7 +748,7 @@ func (m Model) showCleanConfirmation() Model {
 	}
 
 	for _, session := range staleSessions {
-		message.WriteString(fmt.Sprintf("Issue #%d: %s\n", session.IssueNumber, session.IssueTitle))
+		message.WriteString(fmt.Sprintf("Issue #%d: %s\n", session.NamespacedID, session.IssueTitle))
 	}
 	message.WriteString("\n(y/n) Press y to confirm, n to cancel")
 
@@ -766,7 +766,11 @@ func (m Model) executeCleanup() tea.Cmd {
 			// Clean up sandbox
 			sandboxName := session.SandboxName
 			if sandboxName == "" {
-				sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+				if session.SandboxName != "" {
+					sandboxName = session.SandboxName
+				} else {
+					return fmt.Errorf("session missing sandbox name")
+				}
 			}
 
 			sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
@@ -821,7 +825,9 @@ func (m Model) identifyAndCleanStaleSessions() struct {
 		// Clean up sandbox
 		sandboxName := session.SandboxName
 		if sandboxName == "" {
-			sandboxName = m.sandboxManager.GetSandboxName(session.IssueNumber)
+			// Skip sessions without sandbox names
+			hasErrors = true
+			continue
 		}
 
 		sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
@@ -869,7 +875,7 @@ func (m Model) renderLogView() string {
 	sessionTitle := "Log View"
 	if len(m.sessions) > 0 && m.cursor >= 0 && m.cursor < len(m.sessions) {
 		session := m.sessions[m.cursor]
-		sessionTitle = fmt.Sprintf("Log View - Issue #%d: %s", session.IssueNumber, session.IssueTitle)
+		sessionTitle = fmt.Sprintf("Log View - Issue #%d: %s", session.NamespacedID, session.IssueTitle)
 	}
 	b.WriteString(titleStyle.Render(sessionTitle) + "\n\n")
 

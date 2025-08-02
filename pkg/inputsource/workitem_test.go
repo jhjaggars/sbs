@@ -19,7 +19,6 @@ func TestWorkItem_ParseID(t *testing.T) {
 		{"github_namespaced", "github:123", "github", "123", false},
 		{"test_namespaced", "test:quick", "test", "quick", false},
 		{"jira_namespaced", "jira:PROJ-456", "jira", "PROJ-456", false},
-		{"legacy_github", "123", "github", "123", false}, // backward compatibility
 		{"invalid_format", "invalid-format", "", "", true},
 		{"empty_source", ":123", "", "", true},
 		{"empty_id", "github:", "", "", true},
@@ -68,28 +67,6 @@ func TestWorkItem_FullID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.item.FullID()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestWorkItem_IsLegacyFormat(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected bool
-	}{
-		{"numeric_legacy", "123", true},
-		{"numeric_with_hash", "#456", true},
-		{"github_namespaced", "github:123", false},
-		{"test_namespaced", "test:quick", false},
-		{"non_numeric", "abc", false},
-		{"empty", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := IsLegacyFormat(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -156,40 +133,6 @@ func TestWorkItem_GetBranchName(t *testing.T) {
 	}
 }
 
-func TestWorkItem_GetLegacyBranchName(t *testing.T) {
-	tests := []struct {
-		name     string
-		item     *WorkItem
-		expected string
-	}{
-		{
-			name: "github_legacy_format",
-			item: &WorkItem{
-				Source: "github",
-				ID:     "123",
-				Title:  "Fix authentication bug",
-			},
-			expected: "issue-123-fix-authentication-bug",
-		},
-		{
-			name: "non_github_uses_full_format",
-			item: &WorkItem{
-				Source: "test",
-				ID:     "quick",
-				Title:  "Quick development test",
-			},
-			expected: "issue-test-quick-quick-development-test",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.item.GetLegacyBranchName()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestWorkItem_EdgeCases(t *testing.T) {
 	t.Run("special_characters_in_id", func(t *testing.T) {
 		tests := []struct {
@@ -251,40 +194,5 @@ func TestWorkItem_EdgeCases(t *testing.T) {
 			branch := item.GetBranchName()
 			assert.Contains(t, branch, "issue-test-empty")
 		}
-	})
-}
-
-func TestWorkItem_BranchNamingCompatibility(t *testing.T) {
-	t.Run("github_legacy_format", func(t *testing.T) {
-		// GitHub issues should maintain backward-compatible branch names for legacy sessions
-		item := &WorkItem{
-			Source: "github",
-			ID:     "123",
-			Title:  "Fix authentication bug",
-		}
-
-		// For legacy compatibility, GitHub branches should omit source prefix
-		// when created from legacy numeric input
-		legacyBranch := item.GetLegacyBranchName()
-		assert.Equal(t, "issue-123-fix-authentication-bug", legacyBranch)
-
-		// New namespaced format includes source
-		namespacedBranch := item.GetBranchName()
-		assert.Equal(t, "issue-github-123-fix-authentication-bug", namespacedBranch)
-	})
-
-	t.Run("new_sources_use_namespaced_format", func(t *testing.T) {
-		// Non-GitHub sources should always use namespaced format
-		item := &WorkItem{
-			Source: "test",
-			ID:     "quick",
-			Title:  "Quick development test",
-		}
-
-		branch := item.GetBranchName()
-		assert.Equal(t, "issue-test-quick-quick-development-test", branch)
-
-		// No legacy format for non-GitHub sources
-		assert.Equal(t, branch, item.GetLegacyBranchName())
 	})
 }

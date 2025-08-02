@@ -190,9 +190,4 @@ func TestTestInputSource_WorkItemIntegration(t *testing.T) {
 		assert.Equal(t, expected, item.GetBranchName())
 	})
 
-	t.Run("legacy_branch_name", func(t *testing.T) {
-		// Non-GitHub sources should use full format even for legacy
-		expected := "issue-test-quick-quick-development-test"
-		assert.Equal(t, expected, item.GetLegacyBranchName())
-	})
 }

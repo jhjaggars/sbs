@@ -100,23 +100,6 @@ func TestGitHubInputSource_GetWorkItem(t *testing.T) {
 	})
 }
 
-func TestGitHubInputSource_BackwardCompatibility(t *testing.T) {
-	// Test that existing GitHub workflows still work
-	mockClient := &mockGitHubClient{
-		issues: map[int]*issue.Issue{
-			456: {Number: 456, Title: "Legacy issue", State: "open"},
-		},
-	}
-
-	source := &GitHubInputSource{client: mockClient}
-	item, err := source.GetWorkItem("456")
-
-	require.NoError(t, err)
-	assert.Equal(t, "github:456", item.FullID())
-	assert.Equal(t, "issue-github-456-legacy-issue", item.GetBranchName())
-	assert.Equal(t, "issue-456-legacy-issue", item.GetLegacyBranchName()) // Legacy format for GitHub
-}
-
 func TestGitHubInputSource_ListWorkItems(t *testing.T) {
 	// Test list functionality with GitHub client
 	mockClient := &mockGitHubClient{
@@ -199,12 +182,6 @@ func TestGitHubInputSource_Integration(t *testing.T) {
 	t.Run("branch_name", func(t *testing.T) {
 		expected := "issue-github-789-integration-test-issue"
 		assert.Equal(t, expected, item.GetBranchName())
-	})
-
-	t.Run("legacy_branch_name", func(t *testing.T) {
-		// GitHub sources should use legacy format for backward compatibility
-		expected := "issue-789-integration-test-issue"
-		assert.Equal(t, expected, item.GetLegacyBranchName())
 	})
 
 	t.Run("state_preserved", func(t *testing.T) {

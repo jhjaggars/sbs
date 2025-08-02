@@ -229,9 +229,9 @@ func CalculateGlobalViewWidths(terminalWidth int) ColumnWidths {
 }
 
 // FormatRepositoryViewRow formats a row for repository view with given column widths
-func FormatRepositoryViewRow(widths ColumnWidths, issue int, title, branch, status, lastActivity string) string {
-	return fmt.Sprintf("%-*d %-*s %-*s %-*s %-*s",
-		widths.Issue, issue,
+func FormatRepositoryViewRow(widths ColumnWidths, workItemID, title, branch, status, lastActivity string) string {
+	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
+		widths.Issue, TruncateString(workItemID, widths.Issue),
 		widths.Title, TruncateString(title, widths.Title),
 		widths.Branch, TruncateString(branch, widths.Branch),
 		widths.Status, status,
@@ -240,9 +240,9 @@ func FormatRepositoryViewRow(widths ColumnWidths, issue int, title, branch, stat
 }
 
 // FormatGlobalViewRow formats a row for global view with given column widths
-func FormatGlobalViewRow(widths ColumnWidths, issue int, title, repository, branch, status, lastActivity string) string {
-	return fmt.Sprintf("%-*d %-*s %-*s %-*s %-*s %-*s",
-		widths.Issue, issue,
+func FormatGlobalViewRow(widths ColumnWidths, workItemID, title, repository, branch, status, lastActivity string) string {
+	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
+		widths.Issue, TruncateString(workItemID, widths.Issue),
 		widths.Title, TruncateString(title, widths.Title),
 		widths.Repository, TruncateString(repository, widths.Repository),
 		widths.Branch, TruncateString(branch, widths.Branch),
@@ -254,7 +254,7 @@ func FormatGlobalViewRow(widths ColumnWidths, issue int, title, repository, bran
 // FormatRepositoryViewHeader formats the header for repository view with given column widths
 func FormatRepositoryViewHeader(widths ColumnWidths) string {
 	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
-		widths.Issue, "Issue",
+		widths.Issue, "Work Item",
 		widths.Title, "Title",
 		widths.Branch, "Branch",
 		widths.Status, "Status",
@@ -265,7 +265,7 @@ func FormatRepositoryViewHeader(widths ColumnWidths) string {
 // FormatGlobalViewHeader formats the header for global view with given column widths
 func FormatGlobalViewHeader(widths ColumnWidths) string {
 	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-		widths.Issue, "Issue",
+		widths.Issue, "Work Item",
 		widths.Title, "Title",
 		widths.Repository, "Repository",
 		widths.Branch, "Branch",
