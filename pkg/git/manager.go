@@ -74,6 +74,36 @@ func (m *Manager) CreateIssueBranch(issueNumber int, issueTitle string) (string,
 	return branchName, nil
 }
 
+// CreateBranchDirect creates a branch with the exact name provided
+func (m *Manager) CreateBranchDirect(branchName string) error {
+	// Check if branch already exists
+	exists, err := m.BranchExists(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to check if branch exists: %w", err)
+	}
+
+	if exists {
+		return nil // Branch already exists
+	}
+
+	// Get HEAD reference
+	head, err := m.repo.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+
+	// Create new branch
+	branchRef := plumbing.NewBranchReferenceName(branchName)
+	ref := plumbing.NewHashReference(branchRef, head.Hash())
+
+	err = m.repo.Storer.SetReference(ref)
+	if err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
+
+	return nil
+}
+
 func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 	// Ensure worktree directory exists
 	parentDir := filepath.Dir(worktreePath)

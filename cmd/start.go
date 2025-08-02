@@ -391,9 +391,8 @@ func createWorkItemBranch(gitManager *git.Manager, branchName string) error {
 		return nil // Branch already exists
 	}
 
-	// Create the branch using the generic branch creation method
-	// We use a dummy issue number (0) since the branch name is already constructed
-	_, err = gitManager.CreateIssueBranch(0, "")
+	// Create the branch using the direct method with the exact branch name
+	err = gitManager.CreateBranchDirect(branchName)
 	if err != nil {
 		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
 	}

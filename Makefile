@@ -4,10 +4,9 @@
 build:
 	go build -o sbs
 
-# Install to ~/bin (make sure ~/bin is in your PATH)
-install: build
-	mkdir -p ~/bin
-	cp sbs ~/bin/
+# Install using go install
+install:
+	go install
 
 # Clean build artifacts
 clean:
