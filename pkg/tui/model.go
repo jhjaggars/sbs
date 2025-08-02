@@ -763,7 +763,8 @@ func (m Model) showCleanConfirmation() Model {
 func (m Model) executeCleanup() tea.Cmd {
 	sessions := m.pendingCleanSessions
 	return func() tea.Msg {
-		var cleanedSessions []config.SessionMetadata
+		// Initialize cleanedSessions to empty slice instead of nil
+		cleanedSessions := []config.SessionMetadata{}
 		var hasErrors bool
 
 		for _, session := range sessions {
@@ -773,7 +774,11 @@ func (m Model) executeCleanup() tea.Cmd {
 				if session.SandboxName != "" {
 					sandboxName = session.SandboxName
 				} else {
-					return fmt.Errorf("session missing sandbox name")
+					// Return cleanSessionsMsg with error instead of error directly
+					return cleanSessionsMsg{
+						err:             fmt.Errorf("session missing sandbox name"),
+						cleanedSessions: cleanedSessions,
+					}
 				}
 			}
 
@@ -822,7 +827,8 @@ func (m Model) identifyAndCleanStaleSessions() struct {
 } {
 	staleSessions := m.identifyStaleSessionsInCurrentView()
 
-	var cleanedSessions []config.SessionMetadata
+	// Initialize cleanedSessions to empty slice instead of nil
+	cleanedSessions := []config.SessionMetadata{}
 	var hasErrors bool
 
 	for _, session := range staleSessions {

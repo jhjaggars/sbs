@@ -21,6 +21,8 @@ func TestGitManager_BranchCleanup(t *testing.T) {
 
 	t.Run("extract_issue_number_from_branch", func(t *testing.T) {
 		// Test issue number extraction logic
+		// Note: This method now always returns 0 after removing backward compatibility
+		// for legacy numeric issue IDs. All work items use namespaced format (source:id).
 		manager := &Manager{
 			repoPath: "/tmp/test-repo",
 		}
@@ -29,9 +31,9 @@ func TestGitManager_BranchCleanup(t *testing.T) {
 			branchName    string
 			expectedIssue int
 		}{
-			{"issue-123-fix-bug", 123},
-			{"issue-456-add-feature", 456},
-			{"issue-1-simple", 1},
+			{"issue-123-fix-bug", 0},     // Now returns 0 - no longer extracts numbers
+			{"issue-456-add-feature", 0}, // Now returns 0 - no longer extracts numbers
+			{"issue-1-simple", 0},        // Now returns 0 - no longer extracts numbers
 			{"not-an-issue-branch", 0},
 			{"issue-", 0},
 			{"issue-abc-invalid", 0},
