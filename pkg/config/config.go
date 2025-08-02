@@ -28,6 +28,9 @@ type Config struct {
 	StatusRefreshIntervalSecs int  `json:"status_refresh_interval_seconds,omitempty"` // Refresh interval in seconds (default: 60)
 	StatusMaxFileSizeBytes    int  `json:"status_max_file_size_bytes,omitempty"`      // Maximum stop.json file size (default: 1MB)
 	StatusTimeoutSeconds      int  `json:"status_timeout_seconds,omitempty"`          // Timeout for status operations (default: 5)
+
+	// Log display configuration
+	LogRefreshIntervalSecs int `json:"log_refresh_interval_seconds,omitempty"` // Log refresh interval in seconds (default: 5)
 }
 
 // ResourceCreationEntry tracks the creation of individual resources during session setup
@@ -72,6 +75,7 @@ func DefaultConfig() *Config {
 		StatusRefreshIntervalSecs: 60,      // Default to 60 seconds
 		StatusMaxFileSizeBytes:    1048576, // Default to 1MB
 		StatusTimeoutSeconds:      5,       // Default to 5 seconds
+		LogRefreshIntervalSecs:    5,       // Default to 5 seconds
 	}
 }
 
@@ -207,6 +211,11 @@ func MergeConfig(base, override *Config) *Config {
 		merged.StatusTimeoutSeconds = override.StatusTimeoutSeconds
 	}
 
+	// Log display configuration
+	if override.LogRefreshIntervalSecs > 0 {
+		merged.LogRefreshIntervalSecs = override.LogRefreshIntervalSecs
+	}
+
 	return &merged
 }
 
@@ -330,6 +339,11 @@ func validateConfig(config *Config) error {
 		if config.StatusTimeoutSeconds < 1 || config.StatusTimeoutSeconds > 30 {
 			errors = append(errors, "status_timeout_seconds must be between 1 and 30")
 		}
+	}
+
+	// Validate log display configuration (only if explicitly set)
+	if config.LogRefreshIntervalSecs != 0 && (config.LogRefreshIntervalSecs < 1 || config.LogRefreshIntervalSecs > 300) {
+		errors = append(errors, "log_refresh_interval_seconds must be between 1 and 300")
 	}
 
 	// If there are validation errors, return them as a single error
