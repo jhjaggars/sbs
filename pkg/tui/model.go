@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,6 +30,7 @@ type keyMap struct {
 	ToggleView key.Binding
 	Stop       key.Binding
 	Clean      key.Binding
+	LogView    key.Binding
 }
 
 var keys = keyMap{
@@ -65,6 +70,10 @@ var keys = keyMap{
 		key.WithKeys("c"),
 		key.WithHelp("c", "clean stale"),
 	),
+	LogView: key.NewBinding(
+		key.WithKeys("l"),
+		key.WithHelp("l", "logs"),
+	),
 }
 
 type ViewMode int
@@ -72,7 +81,18 @@ type ViewMode int
 const (
 	ViewModeRepository ViewMode = iota // Show only current repo sessions
 	ViewModeGlobal                     // Show all sessions across repos
+	ViewModeLog                        // Show log view for selected session
 )
+
+// LogView represents the state of the log display
+type LogView struct {
+	content      string
+	scrollOffset int
+	loading      bool
+	refreshing   bool
+	errorMessage string
+	maxLines     int
+}
 
 type Model struct {
 	sessions               []config.SessionMetadata
@@ -91,7 +111,12 @@ type Model struct {
 	error                  error
 	showConfirmationDialog bool
 	confirmationMessage    string
-	pendingCleanSessions   []config.SessionMetadata
+
+	// Log view state
+	logView              *LogView
+	previousViewMode     ViewMode
+	logAutoRefreshActive bool
+	pendingCleanSessions []config.SessionMetadata
 }
 
 func NewModel() Model {
@@ -171,6 +196,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Handle log view keys when in log view mode
+		if m.viewMode == ViewModeLog {
+			switch msg.Type {
+			case tea.KeyEsc:
+				// Exit log view and return to previous view
+				m.viewMode = m.previousViewMode
+				m.stopLogAutoRefresh()
+				return m, nil
+			case tea.KeyUp:
+				if m.logView != nil && m.logView.scrollOffset > 0 {
+					m.logView.scrollOffset--
+				}
+				return m, nil
+			case tea.KeyDown:
+				if m.logView != nil {
+					lines := strings.Split(m.logView.content, "\n")
+					maxScroll := len(lines) - m.height + 5 // Leave some space for UI
+					if maxScroll < 0 {
+						maxScroll = 0
+					}
+					if m.logView.scrollOffset < maxScroll {
+						m.logView.scrollOffset++
+					}
+				}
+				return m, nil
+			case tea.KeyRunes:
+				switch string(msg.Runes) {
+				case "q":
+					// Exit log view and return to previous view
+					m.viewMode = m.previousViewMode
+					m.stopLogAutoRefresh()
+					return m, nil
+				case "r":
+					// Manual refresh
+					if m.logView != nil {
+						m.logView.refreshing = true
+					}
+					return m, m.refreshLogContent()
+				}
+			}
+			return m, nil
+		}
+
 		// Normal key handling when modal is not shown
 		switch {
 		case key.Matches(msg, keys.Quit):
@@ -213,6 +281,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, keys.ToggleView):
 			return m.toggleViewMode(), m.refreshSessions()
+
+		case key.Matches(msg, keys.LogView):
+			// Enter log view mode if we have sessions and a valid selection
+			if len(m.sessions) > 0 && m.cursor >= 0 && m.cursor < len(m.sessions) {
+				m.previousViewMode = m.viewMode
+				m.viewMode = ViewModeLog
+				m.logAutoRefreshActive = true
+
+				// Initialize log view if not already initialized
+				if m.logView == nil {
+					m.logView = &LogView{
+						content:      "",
+						scrollOffset: 0,
+						loading:      true,
+						refreshing:   false,
+						errorMessage: "",
+						maxLines:     0,
+					}
+				} else {
+					m.logView.loading = true
+				}
+
+				// Start auto-refresh and initial content load
+				return m, tea.Batch(
+					m.refreshLogContent(),
+					m.startLogAutoRefresh(),
+				)
+			}
+			return m, nil
 		}
 
 	case refreshMsg:
@@ -242,6 +339,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refreshSessions(),
 			m.tickAutoRefresh(),
 		)
+
+	case logRefreshTickMsg:
+		// Handle auto-refresh for log view
+		if m.viewMode == ViewModeLog && m.logAutoRefreshActive {
+			return m, tea.Batch(
+				m.refreshLogContent(),
+				m.startLogAutoRefresh(),
+			)
+		}
+		return m, nil
+
+	case logRefreshResultMsg:
+		// Handle log refresh results
+		if m.logView != nil {
+			m.logView.loading = false
+			m.logView.refreshing = false
+
+			if msg.err != nil {
+				m.logView.errorMessage = fmt.Sprintf("refresh failed: %v", msg.err)
+			} else {
+				m.logView.content = msg.content
+				m.logView.errorMessage = ""
+			}
+		}
+		return m, nil
+
+	case logRefreshErrorMsg:
+		// Handle log refresh errors
+		if m.logView != nil {
+			m.logView.loading = false
+			m.logView.refreshing = false
+			m.logView.errorMessage = fmt.Sprintf("refresh failed: %v", msg.err)
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -250,6 +381,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	if m.error != nil {
 		return fmt.Sprintf("Error: %v\n\nPress q to quit", m.error)
+	}
+
+	// Handle log view rendering
+	if m.viewMode == ViewModeLog {
+		return m.renderLogView()
 	}
 
 	var b strings.Builder
@@ -323,9 +459,9 @@ func (m Model) View() string {
 	if m.showHelp {
 		b.WriteString("\n" + m.helpView())
 	} else {
-		helpText := "\nPress enter: attach, s: stop, c: clean, ?: help, g: toggle, r: refresh, q: quit"
+		helpText := "\nPress enter: attach, l: logs, s: stop, c: clean, ?: help, g: toggle, r: refresh, q: quit"
 		if m.currentRepo == nil && m.viewMode == ViewModeRepository {
-			helpText = "\nNot in git repository - global view. Press enter: attach, s: stop, c: clean, ?: help, r: refresh, q: quit"
+			helpText = "\nNot in git repository - global view. Press enter: attach, l: logs, s: stop, c: clean, ?: help, r: refresh, q: quit"
 		}
 		b.WriteString(helpStyle.Render(helpText))
 	}
@@ -368,6 +504,7 @@ func (m Model) helpView() string {
 	help.WriteString("↑/k    - Move up\n")
 	help.WriteString("↓/j    - Move down\n")
 	help.WriteString("enter  - Attach to selected session\n")
+	help.WriteString("l      - View logs for selected session\n")
 	help.WriteString("s      - Stop selected session\n")
 	help.WriteString("c      - Clean stale sessions\n")
 	help.WriteString("g      - Toggle global/repository view\n")
@@ -425,6 +562,18 @@ type confirmationDialogMsg struct {
 }
 
 type tickMsg struct{}
+
+// Log view message types
+type logRefreshTickMsg struct{}
+
+type logRefreshResultMsg struct {
+	content string
+	err     error
+}
+
+type logRefreshErrorMsg struct {
+	err error
+}
 
 // toggleViewMode switches between repository and global view modes
 func (m Model) toggleViewMode() Model {
@@ -653,6 +802,207 @@ func (m Model) tickAutoRefresh() tea.Cmd {
 	return tea.Tick(interval, func(t time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+
+// renderLogView renders the log view UI
+func (m Model) renderLogView() string {
+	var b strings.Builder
+
+	// Title for log view
+	sessionTitle := "Log View"
+	if len(m.sessions) > 0 && m.cursor >= 0 && m.cursor < len(m.sessions) {
+		session := m.sessions[m.cursor]
+		sessionTitle = fmt.Sprintf("Log View - Issue #%d: %s", session.IssueNumber, session.IssueTitle)
+	}
+	b.WriteString(titleStyle.Render(sessionTitle) + "\n\n")
+
+	// Log content area
+	if m.logView == nil {
+		b.WriteString(mutedStyle.Render("No log view initialized") + "\n")
+	} else if m.logView.loading {
+		b.WriteString(mutedStyle.Render("Loading log content...") + "\n")
+	} else if m.logView.errorMessage != "" {
+		b.WriteString(errorStyle.Render("Error: "+m.logView.errorMessage) + "\n")
+		b.WriteString(mutedStyle.Render("Press 'r' to retry, ESC or 'q' to exit") + "\n")
+	} else if m.logView.content == "" {
+		b.WriteString(mutedStyle.Render("No log content available") + "\n")
+	} else {
+		// Display log content with scrolling
+		lines := strings.Split(m.logView.content, "\n")
+		displayHeight := m.height - 6 // Reserve space for title and help text
+
+		startLine := m.logView.scrollOffset
+		endLine := startLine + displayHeight
+
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+
+		if startLine < len(lines) {
+			visibleLines := lines[startLine:endLine]
+			for _, line := range visibleLines {
+				b.WriteString(line + "\n")
+			}
+		}
+
+		// Show scroll indicators
+		if len(lines) > displayHeight {
+			scrollInfo := fmt.Sprintf("Lines %d-%d of %d", startLine+1, endLine, len(lines))
+			b.WriteString("\n" + mutedStyle.Render(scrollInfo))
+		}
+	}
+
+	// Status line
+	var statusParts []string
+	if m.logView != nil && m.logView.refreshing {
+		statusParts = append(statusParts, "Refreshing...")
+	}
+	if m.logAutoRefreshActive {
+		interval := m.getLogRefreshInterval()
+		statusParts = append(statusParts, fmt.Sprintf("Auto-refresh: %ds", int(interval.Seconds())))
+	}
+
+	if len(statusParts) > 0 {
+		b.WriteString("\n" + mutedStyle.Render(strings.Join(statusParts, " | ")))
+	}
+
+	// Help text for log view
+	helpText := "\nPress ↑/↓: scroll, r: refresh, ESC/q: exit"
+	b.WriteString(helpStyle.Render(helpText))
+
+	content := lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Render(b.String())
+
+	return content
+}
+
+// Log view helper functions
+
+// executeLoghookScript executes the .sbs/loghook script for the given session
+func executeLoghookScript(session config.SessionMetadata) (string, error) {
+	loghookPath := filepath.Join(session.WorktreePath, ".sbs", "loghook")
+
+	// Check if loghook script exists
+	if _, err := os.Stat(loghookPath); os.IsNotExist(err) {
+		return "No loghook script found at " + loghookPath, fmt.Errorf("loghook script not found")
+	}
+
+	// Check if script is executable
+	info, err := os.Stat(loghookPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat loghook script: %w", err)
+	}
+
+	if info.Mode().Perm()&0111 == 0 {
+		return "", fmt.Errorf("permission denied: loghook script is not executable")
+	}
+
+	// Execute script with 10 second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, loghookPath)
+	cmd.Dir = session.WorktreePath // Set working directory to worktree
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return string(output), fmt.Errorf("loghook script timed out after 10 seconds")
+		}
+		return string(output), fmt.Errorf("loghook script failed: %w", err)
+	}
+
+	return string(output), nil
+}
+
+// executeLoghookScriptWithTimeout executes the loghook script with a custom timeout
+func executeLoghookScriptWithTimeout(session config.SessionMetadata, timeoutSecs int) (string, error) {
+	loghookPath := filepath.Join(session.WorktreePath, ".sbs", "loghook")
+
+	// Check if loghook script exists
+	if _, err := os.Stat(loghookPath); os.IsNotExist(err) {
+		return "No loghook script found at " + loghookPath, fmt.Errorf("loghook script not found")
+	}
+
+	// Check if script is executable
+	info, err := os.Stat(loghookPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat loghook script: %w", err)
+	}
+
+	if info.Mode().Perm()&0111 == 0 {
+		return "", fmt.Errorf("permission denied: loghook script is not executable")
+	}
+
+	// Execute script with custom timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSecs)*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, loghookPath)
+	cmd.Dir = session.WorktreePath // Set working directory to worktree
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return string(output), fmt.Errorf("timeout")
+		}
+		return string(output), fmt.Errorf("loghook script failed: %w", err)
+	}
+
+	return string(output), nil
+}
+
+// getLogRefreshInterval returns the configured log refresh interval with bounds checking
+func (m Model) getLogRefreshInterval() time.Duration {
+	intervalSecs := m.config.LogRefreshIntervalSecs
+	if intervalSecs == 0 {
+		intervalSecs = 5 // Default to 5 seconds
+	}
+
+	// Enforce bounds (2-120 seconds)
+	if intervalSecs < 2 {
+		intervalSecs = 2
+	}
+	if intervalSecs > 120 {
+		intervalSecs = 120
+	}
+
+	return time.Duration(intervalSecs) * time.Second
+}
+
+// startLogAutoRefresh starts the auto-refresh mechanism for log view
+func (m Model) startLogAutoRefresh() tea.Cmd {
+	if m.viewMode != ViewModeLog {
+		return nil
+	}
+
+	interval := m.getLogRefreshInterval()
+	return tea.Tick(interval, func(t time.Time) tea.Msg {
+		return logRefreshTickMsg{}
+	})
+}
+
+// stopLogAutoRefresh stops the auto-refresh mechanism
+func (m *Model) stopLogAutoRefresh() {
+	m.logAutoRefreshActive = false
+}
+
+// refreshLogContent refreshes the log content for the current session
+func (m Model) refreshLogContent() tea.Cmd {
+	if m.viewMode != ViewModeLog || len(m.sessions) == 0 || m.cursor < 0 || m.cursor >= len(m.sessions) {
+		return nil
+	}
+
+	session := m.sessions[m.cursor]
+	return func() tea.Msg {
+		content, err := executeLoghookScript(session)
+		return logRefreshResultMsg{
+			content: content,
+			err:     err,
+		}
+	}
 }
 
 // Helper function for maximum of two integers
