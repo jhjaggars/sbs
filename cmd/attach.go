@@ -17,7 +17,7 @@ If the session doesn't exist, an error will be returned.
 
 Work item ID formats:
   sbs attach 123         # Primary work type
-  sbs attach test:quick  # Test work type`,
+  sbs attach test:my-test  # Test work type`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAttach,
 }

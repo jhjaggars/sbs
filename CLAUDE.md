@@ -46,9 +46,9 @@ sbs start PROJ-456                      # Start session for JIRA ticket PROJ-456
 sbs start                              # Interactive work item selection
 
 # Test work types (always available for validation)
-sbs start test:quick                    # Quick development test
-sbs start test:hooks                    # Test Claude Code hooks
-sbs start test:sandbox                  # Test sandbox integration
+sbs start test:my-test                  # Custom test work item with any ID
+sbs start test:feature-x                # Test specific feature development
+sbs start test:debugging                # Debug-focused test environment
 
 # Options
 sbs start 123 --resume                 # Resume existing session without work-issue.sh
@@ -65,11 +65,11 @@ sbs list --plain      # Same as above (default behavior)
 
 # Attach to sessions
 sbs attach 123        # Attach to primary work type session
-sbs attach test:quick # Attach to test work type session
+sbs attach test:my-test # Attach to test work type session
 
 # Stop sessions
 sbs stop 123          # Stop primary work type session (preserves worktree)
-sbs stop test:hooks   # Stop test work type session
+sbs stop test:my-test   # Stop test work type session
 ```
 
 #### Cleanup Operations
@@ -113,7 +113,7 @@ SBS supports pluggable input sources for different work item backends. Each proj
 #### Supported Work Types
 - **GitHub**: Issues from GitHub repositories (`sbs start 123`)
 - **JIRA**: Tickets from JIRA projects (`sbs start PROJ-456`) 
-- **Test**: Built-in test work items for validation (`sbs start test:quick`)
+- **Test**: Built-in test work items for validation (`sbs start test:my-test`)
 
 #### Project Configuration
 
@@ -140,26 +140,25 @@ Projects configure their primary input source via `.sbs/input-source.json`:
 
 #### Work Type Rules
 - **One primary work type per project** (github, jira, etc.)
-- **Test work types always available** (`test:quick`, `test:hooks`, `test:sandbox`)
+- **Test work types always available** (any ID: `test:my-test`, `test:feature-x`, etc.)
 - **No namespace required for primary work type** (`sbs start 123`)
-- **Namespace required for test work types** (`sbs start test:hooks`)
+- **Namespace required for test work types** (`sbs start test:my-test`)
 
-#### Using Test Work Types for Hook Validation
+#### Using Test Work Types for Development
 
-Test work types provide a fast way to validate workflow components:
+Test work types provide isolated environments for development and testing:
 
 ```bash
-# Test stop hook validation
-sbs start test:hooks
-# Work in sandbox, Claude Code generates hook data in .sbs/stop.json
+# Create custom test environments for any purpose
+sbs start test:my-feature    # Test feature development
+sbs start test:debugging     # Debug-focused environment
+sbs start test:experiment    # Experimental work
 
-# Test log hook validation  
-sbs start test:sandbox
-# TUI 'l' key executes .sbs/loghook scripts with consistent environment
-
-# Quick development cycles
-sbs start test:quick
-# Rapid iteration without external dependencies
+# Each test session creates:
+# - Git branch: test-{id}
+# - Worktree: ~/.work-issue-worktrees/test-{id}/
+# - Tmux session: work-issue-test-{id}
+# - Long-running sandbox with sleep infinity
 ```
 
 ### Sandbox Integration

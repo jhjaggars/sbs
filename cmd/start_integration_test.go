@@ -64,7 +64,7 @@ func TestStartCommand_InputSourceIntegration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "test", quickItem.Source)
 		assert.Equal(t, "quick", quickItem.ID)
-		assert.Equal(t, "Quick development test", quickItem.Title)
+		assert.Equal(t, "Test work item: quick", quickItem.Title)
 	})
 }
 

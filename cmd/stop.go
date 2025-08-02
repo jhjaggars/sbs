@@ -22,7 +22,7 @@ The worktree and session metadata are preserved.
 
 Work item ID formats:
   sbs stop 123           # Primary work type
-  sbs stop test:quick    # Test work type`,
+  sbs stop test:my-test    # Test work type`,
 	Args: cobra.ExactArgs(1),
 	RunE: runStop,
 }

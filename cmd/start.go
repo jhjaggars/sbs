@@ -24,9 +24,9 @@ var startCmd = &cobra.Command{
 
 Work item ID formats:
   sbs start 123              # Primary work type (github, jira, etc.)
-  sbs start test:quick       # Test work item (always available)
-  sbs start test:hooks       # Test Claude Code hooks
-  sbs start test:sandbox     # Test sandbox integration
+  sbs start test:my-test     # Test work item with custom ID
+  sbs start test:feature-x   # Test work item for feature development
+  sbs start test:debugging   # Test work item for debugging
 
 When run without arguments, launches interactive work item selection:
   sbs start
@@ -38,7 +38,7 @@ This command will:
 4. Launch work-issue.sh in the session
 
 Input sources are configured via .sbs/input-source.json in your project root.
-Test work types (test:*) are always available for validation regardless of project configuration.`,
+Test work types (test:*) are always available and accept any custom ID regardless of project configuration.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStart,
 }
@@ -274,6 +274,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 			if err := tmuxManager.ExecuteCommandWithSubstitution(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs, substitutions, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to execute repository command: %v\n", err)
+			}
+		} else if workItem.Source == "test" {
+			// Test work items use sandbox sleep infinity for long-running processes
+			fmt.Printf("Starting sandbox with sleep infinity for test work item...\n")
+			sandboxCommand := fmt.Sprintf("sandbox --name \"%s\" sleep infinity", sandboxName)
+			if err := tmuxManager.ExecuteCommand(session.Name, sandboxCommand, nil, tmuxEnv); err != nil {
+				fmt.Printf("Warning: Failed to start sandbox sleep: %v\n", err)
 			}
 		} else {
 			// Default behavior - execute work-issue.sh
