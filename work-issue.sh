@@ -101,11 +101,10 @@ install_claude_hook() {
   # Create a temporary file for atomic update
   local temp_file=$(mktemp)
   
-  # Configure Claude Code hook - add PostToolUse hook
+  # Configure Claude Code hook - add Stop hook
   jq --arg hook_path "$sandbox_hook" '
-    .hooks.PostToolUse = [
+    .hooks.Stop = [
       {
-        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
@@ -118,7 +117,7 @@ install_claude_hook() {
   
   if [ $? -eq 0 ]; then
     mv "$temp_file" "$claude_config"
-    echo "Claude Code hook configured in sandbox: PostToolUse -> $sandbox_hook"
+    echo "Claude Code hook configured in sandbox: Stop -> $sandbox_hook"
   else
     echo "Warning: Failed to configure Claude Code hook"
     rm -f "$temp_file"

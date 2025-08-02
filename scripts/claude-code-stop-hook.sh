@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Claude Code Stop Hook
-# This script captures Claude Code hook data and writes it to .sbs/stop.json
-# It reads JSON data from stdin and stores it in the project directory
+# This script captures Claude Code Stop hook data and writes it to .sbs/stop.json
+# It reads Stop hook JSON data from stdin and stores it in the project directory
 
 set -euo pipefail
 
@@ -67,6 +67,19 @@ main() {
         exit 1
     fi
 
+    # Try to extract session_id to validate this is Stop hook data
+    local session_id=""
+    if command -v jq >/dev/null 2>&1; then
+        session_id=$(echo "${hook_data}" | jq -r '.session_id // empty' 2>/dev/null || echo "")
+        if [[ -n "${session_id}" ]]; then
+            log_info "Processing Stop hook data for session: ${session_id}"
+        else
+            log_info "Processing hook data (session_id not found, may not be Stop hook format)"
+        fi
+    else
+        log_info "Processing hook data (jq not available for validation)"
+    fi
+
     # Add timestamp to the hook data
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     
@@ -83,13 +96,14 @@ main() {
     enhanced_data=$(cat <<EOF
 {
   "claude_code_hook": {
+    "hook_type": "Stop",
     "timestamp": "${timestamp}",
     "environment": "${environment_type}",
     "project_directory": "${project_dir}",
     "hook_script": "$0",
     "sandbox_detection": $(is_sandbox_environment && echo "true" || echo "false")
   },
-  "hook_data": ${hook_data}
+  "stop_hook_data": ${hook_data}
 }
 EOF
 )
