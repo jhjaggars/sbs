@@ -22,9 +22,9 @@ var startCmd = &cobra.Command{
 	Short: "Start a new work environment for any work item",
 	Long: `Create or resume a work environment for any work item from configured input sources.
 
-REQUIRED: Work item ID must be in namespaced format (source:id):
-  sbs start github:123       # GitHub issue
-  sbs start test:quick       # Test work item
+Work item ID formats:
+  sbs start 123              # Primary work type (github, jira, etc.)
+  sbs start test:quick       # Test work item (always available)
   sbs start test:hooks       # Test Claude Code hooks
   sbs start test:sandbox     # Test sandbox integration
 
@@ -37,7 +37,8 @@ This command will:
 3. Create/attach to a tmux session (work-issue-{source}-{id})
 4. Launch work-issue.sh in the session
 
-Input sources are configured via .sbs/input-source.json in your project root.`,
+Input sources are configured via .sbs/input-source.json in your project root.
+Test work types (test:*) are always available for validation regardless of project configuration.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStart,
 }
@@ -76,8 +77,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create input source: %w", err)
 	}
 
-	// Load input source configuration for validation settings
-	inputSourceConfig, err := config.LoadInputSourceConfig(currentRepo.Root)
+	// Load input source configuration (not used in simplified architecture, but kept for future extensions)
+	_, err = config.LoadInputSourceConfig(currentRepo.Root)
 	if err != nil {
 		return fmt.Errorf("failed to load input source config: %w", err)
 	}
@@ -107,29 +108,30 @@ func runStart(cmd *cobra.Command, args []string) error {
 		// Work item ID provided as argument
 		workItemIDStr := args[0]
 
-		// Parse the work item ID (requires namespaced format)
-		parsedWorkItem, err := inputsource.ParseWorkItemID(workItemIDStr)
-		if err != nil {
-			return fmt.Errorf("invalid work item ID: %s (%w)", workItemIDStr, err)
-		}
-
-		// If the parsed source doesn't match the project's input source, validate it's allowed
-		if parsedWorkItem.Source != inputSourceInstance.GetType() {
-			if !inputSourceConfig.AllowCrossSource() {
-				return fmt.Errorf("work item source '%s' doesn't match project input source '%s'. "+
-					"To allow cross-source usage, set allow_cross_source: true in .sbs/input-source.json",
-					parsedWorkItem.Source, inputSourceInstance.GetType())
+		// Parse the work item ID - support both namespaced (test:*) and simple formats
+		if strings.HasPrefix(workItemIDStr, "test:") {
+			// Test work type - use namespaced parsing
+			parsedWorkItem, err := inputsource.ParseWorkItemID(workItemIDStr)
+			if err != nil {
+				return fmt.Errorf("invalid test work item ID: %s (%w)", workItemIDStr, err)
 			}
+
 			if verbose {
-				fmt.Printf("Debug: Cross-source usage allowed: using %s work item with %s project\n",
-					parsedWorkItem.Source, inputSourceInstance.GetType())
+				fmt.Printf("Debug: Using test work item for validation in %s project\n", inputSourceInstance.GetType())
 			}
-		}
 
-		// Fetch the full work item details
-		workItem, err = inputSourceInstance.GetWorkItem(parsedWorkItem.ID)
-		if err != nil {
-			return fmt.Errorf("failed to get work item %s: %w", parsedWorkItem.FullID(), err)
+			// Use test input source
+			testSource := inputsource.NewTestInputSource()
+			workItem, err = testSource.GetWorkItem(parsedWorkItem.ID)
+			if err != nil {
+				return fmt.Errorf("failed to get test work item %s: %w", parsedWorkItem.FullID(), err)
+			}
+		} else {
+			// Primary work type - use simple ID format (no namespace required)
+			workItem, err = inputSourceInstance.GetWorkItem(workItemIDStr)
+			if err != nil {
+				return fmt.Errorf("failed to get work item %s from %s source: %w", workItemIDStr, inputSourceInstance.GetType(), err)
+			}
 		}
 	}
 

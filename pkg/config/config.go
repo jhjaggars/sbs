@@ -43,6 +43,7 @@ type ResourceCreationEntry struct {
 }
 
 type SessionMetadata struct {
+	IssueNumber    int    `json:"issue_number,omitempty"` // Legacy compatibility field
 	IssueTitle     string `json:"issue_title"`
 	FriendlyTitle  string `json:"friendly_title"` // Sandbox-friendly version of issue title
 	Branch         string `json:"branch"`

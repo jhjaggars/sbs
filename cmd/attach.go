@@ -15,9 +15,9 @@ var attachCmd = &cobra.Command{
 	Long: `Attach to the tmux session for the specified work item.
 If the session doesn't exist, an error will be returned.
 
-REQUIRED: Work item ID must be in namespaced format (source:id):
-  sbs attach github:123
-  sbs attach test:quick`,
+Work item ID formats:
+  sbs attach 123         # Primary work type
+  sbs attach test:quick  # Test work type`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAttach,
 }

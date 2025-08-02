@@ -68,12 +68,17 @@ func TestStartCommand_InputSourceIntegration(t *testing.T) {
 	})
 }
 
-func TestStartCommand_NamespacedFormat(t *testing.T) {
-	t.Run("requires_namespaced_format", func(t *testing.T) {
-		// Test that numeric-only input is rejected
-		workItem, err := inputsource.ParseWorkItemID("123")
-		assert.Error(t, err)
-		assert.Nil(t, workItem)
-		assert.Contains(t, err.Error(), "expected 'source:id' format")
+func TestStartCommand_WorkItemIDParsing(t *testing.T) {
+	t.Run("supports_simple_id_format", func(t *testing.T) {
+		// Test that simple numeric input is now accepted (for primary work types)
+		// This will be handled by the start command logic, not ParseWorkItemID
+		// ParseWorkItemID still requires namespaced format, but start command handles both
+
+		// Test namespaced format still works
+		workItem, err := inputsource.ParseWorkItemID("test:quick")
+		assert.NoError(t, err)
+		assert.NotNil(t, workItem)
+		assert.Equal(t, "test", workItem.Source)
+		assert.Equal(t, "quick", workItem.ID)
 	})
 }

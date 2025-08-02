@@ -748,7 +748,11 @@ func (m Model) showCleanConfirmation() Model {
 	}
 
 	for _, session := range staleSessions {
-		message.WriteString(fmt.Sprintf("Issue #%d: %s\n", session.NamespacedID, session.IssueTitle))
+		if session.NamespacedID != "" {
+			message.WriteString(fmt.Sprintf("Work Item %s: %s\n", session.NamespacedID, session.IssueTitle))
+		} else {
+			message.WriteString(fmt.Sprintf("Issue #%d: %s\n", session.IssueNumber, session.IssueTitle))
+		}
 	}
 	message.WriteString("\n(y/n) Press y to confirm, n to cancel")
 
@@ -875,7 +879,11 @@ func (m Model) renderLogView() string {
 	sessionTitle := "Log View"
 	if len(m.sessions) > 0 && m.cursor >= 0 && m.cursor < len(m.sessions) {
 		session := m.sessions[m.cursor]
-		sessionTitle = fmt.Sprintf("Log View - Issue #%d: %s", session.NamespacedID, session.IssueTitle)
+		if session.NamespacedID != "" {
+			sessionTitle = fmt.Sprintf("Log View - Work Item %s: %s", session.NamespacedID, session.IssueTitle)
+		} else {
+			sessionTitle = fmt.Sprintf("Log View - Issue #%d: %s", session.IssueNumber, session.IssueTitle)
+		}
 	}
 	b.WriteString(titleStyle.Render(sessionTitle) + "\n\n")
 

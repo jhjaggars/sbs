@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-SBS (Sandbox Sessions) is a Go CLI application that orchestrates GitHub issue work environments with automatic git worktree and tmux session management. It creates isolated development environments for each GitHub issue.
+SBS (Sandbox Sessions) is a Go CLI application that orchestrates work item environments with automatic git worktree and tmux session management. It supports multiple input sources (GitHub, JIRA, etc.) and creates isolated development environments for each work item. Test work types are always available for validation purposes.
 
 ## Common Development Commands
 
@@ -40,21 +40,36 @@ go run .               # Run TUI without building
 
 #### Start Command
 ```bash
-sbs start 123                           # Start session for issue #123
-sbs start                              # Interactive issue selection
-sbs start 123 --resume                # Resume existing session without work-issue.sh
-sbs start 123 --no-command            # Start without executing any command
-sbs start 123 --command "make test"   # Custom command instead of work-issue.sh
-sbs start 123 --verbose               # Enable verbose debug output
-go run . start 123                     # Run without building
+# Primary work types (no namespace required)
+sbs start 123                           # Start session for work item #123 (GitHub, JIRA, etc.)
+sbs start PROJ-456                      # Start session for JIRA ticket PROJ-456
+sbs start                              # Interactive work item selection
+
+# Test work types (always available for validation)
+sbs start test:quick                    # Quick development test
+sbs start test:hooks                    # Test Claude Code hooks
+sbs start test:sandbox                  # Test sandbox integration
+
+# Options
+sbs start 123 --resume                 # Resume existing session without work-issue.sh
+sbs start 123 --no-command             # Start without executing any command
+sbs start 123 --command "make test"    # Custom command instead of work-issue.sh
+sbs start 123 --verbose                # Enable verbose debug output
+go run . start 123                      # Run without building
 ```
 
 #### List and Management
 ```bash
 sbs list              # List sessions in plain text format
 sbs list --plain      # Same as above (default behavior)
-sbs attach 123        # Attach to existing tmux session
-sbs stop 123          # Stop tmux session (preserves worktree)
+
+# Attach to sessions
+sbs attach 123        # Attach to primary work type session
+sbs attach test:quick # Attach to test work type session
+
+# Stop sessions
+sbs stop 123          # Stop primary work type session (preserves worktree)
+sbs stop test:hooks   # Stop test work type session
 ```
 
 #### Cleanup Operations
@@ -89,6 +104,63 @@ sbs --help                             # Show help for any command
 - `pkg/issue/`: GitHub issue integration
 - `pkg/repo/`: Repository management
 - `pkg/validation/`: Tool validation utilities
+- `pkg/inputsource/`: Pluggable input source interfaces and implementations
+
+### Input Source Architecture
+
+SBS supports pluggable input sources for different work item backends. Each project has one primary work type, with test work types always available for validation.
+
+#### Supported Work Types
+- **GitHub**: Issues from GitHub repositories (`sbs start 123`)
+- **JIRA**: Tickets from JIRA projects (`sbs start PROJ-456`) 
+- **Test**: Built-in test work items for validation (`sbs start test:quick`)
+
+#### Project Configuration
+
+Projects configure their primary input source via `.sbs/input-source.json`:
+
+```json
+{
+  "type": "github",
+  "settings": {
+    "repository": "auto-detect"
+  }
+}
+```
+
+```json
+{
+  "type": "jira",
+  "settings": {
+    "url": "https://company.atlassian.net",
+    "project": "PROJ"
+  }
+}
+```
+
+#### Work Type Rules
+- **One primary work type per project** (github, jira, etc.)
+- **Test work types always available** (`test:quick`, `test:hooks`, `test:sandbox`)
+- **No namespace required for primary work type** (`sbs start 123`)
+- **Namespace required for test work types** (`sbs start test:hooks`)
+
+#### Using Test Work Types for Hook Validation
+
+Test work types provide a fast way to validate workflow components:
+
+```bash
+# Test stop hook validation
+sbs start test:hooks
+# Work in sandbox, Claude Code generates hook data in .sbs/stop.json
+
+# Test log hook validation  
+sbs start test:sandbox
+# TUI 'l' key executes .sbs/loghook scripts with consistent environment
+
+# Quick development cycles
+sbs start test:quick
+# Rapid iteration without external dependencies
+```
 
 ### Sandbox Integration
 

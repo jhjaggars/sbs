@@ -57,7 +57,7 @@ func TestGitManager_BranchDiscovery(t *testing.T) {
 		// We expect an error since no real repo, but method should exist
 		assert.NotNil(t, err) // Method exists and returns error for invalid repo
 
-		orphanedBranches, err := manager.FindOrphanedIssueBranches([]int{123, 456})
+		orphanedBranches, err := manager.FindOrphanedIssueBranches([]string{"123", "456"})
 		assert.NotNil(t, err) // Method exists
 		_ = orphanedBranches  // Will be nil due to error, but method exists
 
