@@ -288,28 +288,11 @@ func (m *Manager) getSessionWorkingDir(sessionName string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// extractIssueNumber extracts issue number from session names in different formats
+// extractIssueNumber extracts issue number from session names
+// Since we now use namespaced format, this always returns 0 for generic handling
 func (m *Manager) extractIssueNumber(sessionName string) int {
-	// Remove work-issue- prefix
-	remainder := strings.TrimPrefix(sessionName, "work-issue-")
-
-	// Split by hyphens
-	parts := strings.Split(remainder, "-")
-
-	// Try to parse the last part as issue number (new format: work-issue-repo-123)
-	if len(parts) > 1 {
-		if issueNum, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
-			return issueNum
-		}
-	}
-
-	// Try to parse the first part as issue number (legacy format: work-issue-123)
-	if len(parts) > 0 {
-		if issueNum, err := strconv.Atoi(parts[0]); err == nil {
-			return issueNum
-		}
-	}
-
+	// With namespaced work items, we don't extract numeric issue numbers anymore
+	// All work items are handled generically
 	return 0
 }
 

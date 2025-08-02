@@ -602,19 +602,7 @@ func (m *Manager) extractWorkItemFromBranch(branchName string) string {
 // extractIssueNumberFromBranch extracts the issue number from a branch name like "issue-123-some-title"
 // This is kept for backward compatibility but should be phased out
 func (m *Manager) extractIssueNumberFromBranch(branchName string) int {
-	if !strings.HasPrefix(branchName, "issue-") {
-		return 0
-	}
-
-	parts := strings.Split(branchName, "-")
-	if len(parts) < 2 {
-		return 0
-	}
-
-	issueNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0
-	}
-
-	return issueNumber
+	// With namespaced work items, we don't extract numeric issue numbers anymore
+	// All work items are handled generically
+	return 0
 }

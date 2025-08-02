@@ -20,7 +20,7 @@ var stopCmd = &cobra.Command{
 	Long: `Stop the tmux session for the specified work item.
 The worktree and session metadata are preserved.
 
-Examples:
+REQUIRED: Work item ID must be in namespaced format (source:id):
   sbs stop github:123
   sbs stop test:quick`,
 	Args: cobra.ExactArgs(1),

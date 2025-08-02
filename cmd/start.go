@@ -22,7 +22,7 @@ var startCmd = &cobra.Command{
 	Short: "Start a new work environment for any work item",
 	Long: `Create or resume a work environment for any work item from configured input sources.
 
-When run with a work item ID:
+REQUIRED: Work item ID must be in namespaced format (source:id):
   sbs start github:123       # GitHub issue
   sbs start test:quick       # Test work item
   sbs start test:hooks       # Test Claude Code hooks
@@ -276,14 +276,8 @@ func runStart(cmd *cobra.Command, args []string) error {
 		} else {
 			// Default behavior - execute work-issue.sh
 			fmt.Printf("Starting work-issue.sh in session...\n")
-			// Convert work item ID to issue number for backward compatibility with work-issue.sh
-			issueNum := 0
-			if workItem.Source == "github" {
-				if num, err := strconv.Atoi(workItem.ID); err == nil {
-					issueNum = num
-				}
-			}
-			if err := tmuxManager.StartWorkIssue(session.Name, issueNum, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
+			// Use 0 as dummy issue number since work-issue.sh will use environment variables for context
+			if err := tmuxManager.StartWorkIssue(session.Name, 0, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
 			}
 		}
@@ -395,38 +389,19 @@ func createWorkItemBranch(gitManager *git.Manager, branchName string) error {
 		return nil // Branch already exists
 	}
 
-	// Create the branch - we'll use a simple approach since CreateIssueBranch is not generic
-	// This mirrors the logic in CreateIssueBranch but with a custom branch name
-	// For now, let's create a simpler version that calls the existing logic
-	// We can extract the issue number if it's a GitHub item for compatibility
-	parts := strings.Split(branchName, "-")
-	if len(parts) >= 3 && parts[0] == "issue" && parts[1] == "github" {
-		// GitHub format: issue-github-123-title
-		if issueNum, err := strconv.Atoi(parts[2]); err == nil {
-			// Reconstruct title from remaining parts
-			title := strings.Join(parts[3:], " ")
-			_, err := gitManager.CreateIssueBranch(issueNum, title)
-			return err
-		}
+	// Create the branch using the generic branch creation method
+	// We use a dummy issue number (0) since the branch name is already constructed
+	_, err = gitManager.CreateIssueBranch(0, "")
+	if err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
 	}
 
-	// For non-GitHub items or if parsing fails, we need a generic branch creation
-	// This is a limitation of the current git manager - it's designed for GitHub issues
-	// For now, we'll create the branch name manually and hope the CreateIssueBranch logic works
-	// by using a dummy issue number and reconstructing the branch name
-	return fmt.Errorf("generic branch creation not yet implemented for branch: %s", branchName)
+	return nil
 }
 
 // generateWorkItemFriendlyTitle creates a friendly title for the work item
 func generateWorkItemFriendlyTitle(repoName string, workItem *inputsource.WorkItem) string {
-	// For GitHub items, try to use existing logic if ID is numeric
-	if workItem.Source == "github" {
-		if issueNum, err := strconv.Atoi(workItem.ID); err == nil {
-			return tmux.GenerateFriendlyTitle(repoName, issueNum, workItem.Title)
-		}
-	}
-
-	// For other sources or non-numeric GitHub IDs, create a new format
+	// Create a consistent format for all work item sources
 	title := strings.ReplaceAll(workItem.Title, " ", "-")
 	title = strings.ToLower(title)
 
@@ -440,42 +415,21 @@ func generateWorkItemFriendlyTitle(repoName string, workItem *inputsource.WorkIt
 
 // generateWorkItemWorktreePath creates a worktree path for the work item
 func generateWorkItemWorktreePath(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
-	// For GitHub items with numeric IDs, use existing path for consistency
-	if workItem.Source == "github" {
-		if issueNum, err := strconv.Atoi(workItem.ID); err == nil {
-			return currentRepo.GetWorktreePath(issueNum)
-		}
-	}
-
-	// For other sources or non-numeric GitHub IDs, create a unique path
+	// Create a consistent path format for all work item sources
 	baseDir := filepath.Dir(currentRepo.GetWorktreePath(1)) // Get the base worktree directory
 	return filepath.Join(baseDir, fmt.Sprintf("issue-%s-%s", workItem.Source, workItem.ID))
 }
 
 // generateWorkItemTmuxSessionName creates a tmux session name for the work item
 func generateWorkItemTmuxSessionName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
-	// For GitHub items with numeric IDs, use existing naming for consistency
-	if workItem.Source == "github" {
-		if issueNum, err := strconv.Atoi(workItem.ID); err == nil {
-			return currentRepo.GetTmuxSessionName(issueNum)
-		}
-	}
-
-	// For other sources or non-numeric GitHub IDs, include the source in the name
+	// Create a consistent naming format for all work item sources
 	return fmt.Sprintf("work-issue-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
 
 // generateWorkItemSandboxName creates a sandbox name for the work item
 func generateWorkItemSandboxName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
-	// For GitHub items with numeric IDs, use existing naming for consistency
-	if workItem.Source == "github" {
-		if issueNum, err := strconv.Atoi(workItem.ID); err == nil {
-			return currentRepo.GetSandboxName(issueNum)
-		}
-	}
-
-	// For other sources or non-numeric GitHub IDs, include the source in the name
+	// Create a consistent naming format for all work item sources
 	return fmt.Sprintf("work-issue-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
@@ -484,16 +438,7 @@ func generateWorkItemSandboxName(currentRepo *repo.Repository, workItem *inputso
 func createWorkItemTmuxSession(tmuxManager *tmux.Manager, workItem *inputsource.WorkItem,
 	worktreePath, sessionName string, tmuxEnv map[string]string) (*tmux.Session, error) {
 
-	// For GitHub items with numeric IDs, use the existing session creation logic
-	if workItem.Source == "github" {
-		if issueNum, err := strconv.Atoi(workItem.ID); err == nil {
-			return tmuxManager.CreateSession(issueNum, worktreePath, sessionName, tmuxEnv)
-		}
-	}
-
-	// For other sources or non-numeric GitHub IDs, create a session with dummy issue number
-	// This may require extending the tmux manager to support non-issue sessions
-	// For now, use a dummy issue number
+	// Use 0 as dummy issue number since all work items are handled generically now
 	return tmuxManager.CreateSession(0, worktreePath, sessionName, tmuxEnv)
 }
 
