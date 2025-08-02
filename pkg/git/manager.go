@@ -422,25 +422,25 @@ func (m *Manager) ListIssueBranches() ([]string, error) {
 }
 
 // FindOrphanedIssueBranches finds issue branches that don't have active sessions.
-// It compares all existing issue branches against the provided list of active session issue numbers
+// It compares all existing issue branches against the provided list of active session work item IDs
 // and returns branches that don't correspond to any active session.
-func (m *Manager) FindOrphanedIssueBranches(activeSessionIssues []int) ([]string, error) {
+func (m *Manager) FindOrphanedIssueBranches(activeSessionWorkItems []string) ([]string, error) {
 	allIssueBranches, err := m.ListIssueBranches()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get issue branches: %w", err)
 	}
 
-	// Create map of active issues for quick lookup
-	activeIssues := make(map[int]bool)
-	for _, issue := range activeSessionIssues {
-		activeIssues[issue] = true
+	// Create map of active work items for quick lookup
+	activeWorkItems := make(map[string]bool)
+	for _, workItem := range activeSessionWorkItems {
+		activeWorkItems[workItem] = true
 	}
 
 	var orphanedBranches []string
 	for _, branch := range allIssueBranches {
-		// Extract issue number from branch name
-		issueNumber := m.extractIssueNumberFromBranch(branch)
-		if issueNumber > 0 && !activeIssues[issueNumber] {
+		// Extract work item ID from branch name
+		workItemID := m.extractWorkItemFromBranch(branch)
+		if workItemID != "" && !activeWorkItems[workItemID] {
 			orphanedBranches = append(orphanedBranches, branch)
 		}
 	}
@@ -581,21 +581,28 @@ func (m *Manager) DeleteMultipleBranches(branchNames []string, dryRun bool) ([]B
 	return results, nil
 }
 
-// extractIssueNumberFromBranch extracts the issue number from a branch name like "issue-123-some-title"
-func (m *Manager) extractIssueNumberFromBranch(branchName string) int {
+// extractWorkItemFromBranch extracts the work item ID from a branch name
+// Expects new format "issue-source-id-some-title" only
+func (m *Manager) extractWorkItemFromBranch(branchName string) string {
 	if !strings.HasPrefix(branchName, "issue-") {
-		return 0
+		return ""
 	}
 
 	parts := strings.Split(branchName, "-")
-	if len(parts) < 2 {
-		return 0
+	if len(parts) < 3 {
+		return ""
 	}
 
-	issueNumber, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0
-	}
+	// New format: issue-source-id-title
+	source := parts[1]
+	id := parts[2]
+	return source + ":" + id
+}
 
-	return issueNumber
+// extractIssueNumberFromBranch extracts the issue number from a branch name like "issue-123-some-title"
+// This is kept for backward compatibility but should be phased out
+func (m *Manager) extractIssueNumberFromBranch(branchName string) int {
+	// With namespaced work items, we don't extract numeric issue numbers anymore
+	// All work items are handled generically
+	return 0
 }

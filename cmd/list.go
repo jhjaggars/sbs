@@ -79,7 +79,7 @@ func runPlainList() error {
 
 		if useGlobalView {
 			row = tui.FormatGlobalViewRow(widths,
-				session.IssueNumber,
+				session.NamespacedID,
 				session.IssueTitle,
 				session.RepositoryName,
 				session.Branch,
@@ -88,7 +88,7 @@ func runPlainList() error {
 			)
 		} else {
 			row = tui.FormatRepositoryViewRow(widths,
-				session.IssueNumber,
+				session.NamespacedID,
 				session.IssueTitle,
 				session.Branch,
 				session.Status,

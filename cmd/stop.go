@@ -4,23 +4,25 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
 	"sbs/pkg/git"
-	"sbs/pkg/issue"
 	"sbs/pkg/repo"
 	"sbs/pkg/sandbox"
 	"sbs/pkg/tmux"
 )
 
 var stopCmd = &cobra.Command{
-	Use:   "stop <issue-number>",
+	Use:   "stop <work-item-id>",
 	Short: "Stop a work session",
-	Long: `Stop the tmux session for the specified issue.
-The worktree and session metadata are preserved.`,
+	Long: `Stop the tmux session for the specified work item.
+The worktree and session metadata are preserved.
+
+REQUIRED: Work item ID must be in namespaced format (source:id):
+  sbs stop github:123
+  sbs stop test:quick`,
 	Args: cobra.ExactArgs(1),
 	RunE: runStop,
 }
@@ -32,11 +34,7 @@ func init() {
 }
 
 func runStop(cmd *cobra.Command, args []string) error {
-	issueNumberStr := args[0]
-	issueNumber, err := strconv.Atoi(issueNumberStr)
-	if err != nil {
-		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
-	}
+	workItemID := args[0]
 
 	// Get flags
 	deleteBranch, _ := cmd.Flags().GetBool("delete-branch")
@@ -48,11 +46,16 @@ func runStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
 
-	// Find session
-	issueTracker := issue.NewTracker(cfg)
-	session := issueTracker.FindSessionByIssue(sessions, issueNumber)
+	// Find session by namespaced ID
+	var session *config.SessionMetadata
+	for _, s := range sessions {
+		if s.NamespacedID == workItemID {
+			session = &s
+			break
+		}
+	}
 	if session == nil {
-		return fmt.Errorf("no session found for issue #%d", issueNumber)
+		return fmt.Errorf("no session found for work item %s", workItemID)
 	}
 
 	// Stop tmux session
@@ -75,8 +78,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 	sandboxManager := sandbox.NewManager()
 	sandboxName := session.SandboxName
 	if sandboxName == "" {
-		// For backward compatibility, generate sandbox name
-		sandboxName = sandboxManager.GetSandboxName(issueNumber)
+		return fmt.Errorf("session missing sandbox name - cannot stop sandbox for %s", workItemID)
 	}
 
 	sandboxExists, err := sandboxManager.SandboxExists(sandboxName)
@@ -113,7 +115,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 
 	// Update session status
 	for i, s := range sessions {
-		if s.IssueNumber == issueNumber {
+		if s.NamespacedID == workItemID {
 			sessions[i].Status = "stopped"
 			break
 		}
@@ -133,8 +135,8 @@ func runStop(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Session for issue #%d stopped. Worktree preserved at: %s\n",
-		issueNumber, session.WorktreePath)
+	fmt.Printf("Session for work item %s stopped. Worktree preserved at: %s\n",
+		workItemID, session.WorktreePath)
 
 	return nil
 }

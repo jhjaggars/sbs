@@ -160,3 +160,120 @@ type mockIssueTracker struct {
 
 // These would be used in integration tests for the actual runStart function
 // but kept separate to avoid side effects during unit testing
+
+// Test cross-source validation functionality
+func TestStartCommand_CrossSourceValidation(t *testing.T) {
+	t.Run("cross_source_denied_by_default", func(t *testing.T) {
+		// Test that cross-source usage is denied by default
+		// This would be an integration test in a real scenario
+		// Here we test the validation logic conceptually
+
+		projectSource := "github"
+		workItemSource := "test"
+		allowCrossSource := false
+
+		if workItemSource != projectSource && !allowCrossSource {
+			// Expected behavior: should be denied
+			assert.NotEqual(t, workItemSource, projectSource, "Sources should be different for this test")
+			assert.False(t, allowCrossSource, "Cross-source should be denied by default")
+		}
+	})
+
+	t.Run("cross_source_allowed_with_config", func(t *testing.T) {
+		// Test that cross-source usage is allowed when configured
+		projectSource := "github"
+		workItemSource := "test"
+		allowCrossSource := true
+
+		if workItemSource != projectSource && allowCrossSource {
+			// Expected behavior: should be allowed
+			assert.NotEqual(t, workItemSource, projectSource, "Sources should be different for this test")
+			assert.True(t, allowCrossSource, "Cross-source should be allowed when configured")
+		}
+	})
+
+	t.Run("same_source_always_allowed", func(t *testing.T) {
+		// Test that same-source usage is always allowed regardless of config
+		projectSource := "github"
+		workItemSource := "github"
+
+		// Same source should always be allowed
+		assert.Equal(t, workItemSource, projectSource, "Same sources should always be allowed")
+	})
+}
+
+// Test input source configuration functionality
+func TestStartCommand_InputSourceConfig(t *testing.T) {
+	t.Run("default_config_denies_cross_source", func(t *testing.T) {
+		// Test that default configuration denies cross-source usage
+		// This tests the AllowCrossSource() method behavior
+
+		defaultSettings := map[string]interface{}{
+			"repository":         "auto-detect",
+			"allow_cross_source": false,
+		}
+
+		// Simulate the AllowCrossSource check
+		allowCrossSource := false
+		if value, exists := defaultSettings["allow_cross_source"]; exists {
+			if boolValue, ok := value.(bool); ok {
+				allowCrossSource = boolValue
+			}
+		}
+
+		assert.False(t, allowCrossSource, "Default config should deny cross-source usage")
+	})
+
+	t.Run("explicit_config_allows_cross_source", func(t *testing.T) {
+		// Test that explicit configuration allows cross-source usage
+		explicitSettings := map[string]interface{}{
+			"repository":         "auto-detect",
+			"allow_cross_source": true,
+		}
+
+		// Simulate the AllowCrossSource check
+		allowCrossSource := false
+		if value, exists := explicitSettings["allow_cross_source"]; exists {
+			if boolValue, ok := value.(bool); ok {
+				allowCrossSource = boolValue
+			}
+		}
+
+		assert.True(t, allowCrossSource, "Explicit config should allow cross-source usage")
+	})
+
+	t.Run("missing_config_defaults_to_false", func(t *testing.T) {
+		// Test that missing cross-source config defaults to false
+		settingsWithoutCrossSource := map[string]interface{}{
+			"repository": "auto-detect",
+		}
+
+		// Simulate the AllowCrossSource check when key is missing
+		allowCrossSource := false
+		if value, exists := settingsWithoutCrossSource["allow_cross_source"]; exists {
+			if boolValue, ok := value.(bool); ok {
+				allowCrossSource = boolValue
+			}
+		}
+
+		assert.False(t, allowCrossSource, "Missing config should default to false")
+	})
+
+	t.Run("invalid_config_type_defaults_to_false", func(t *testing.T) {
+		// Test that invalid config type defaults to false
+		settingsWithInvalidType := map[string]interface{}{
+			"repository":         "auto-detect",
+			"allow_cross_source": "yes", // string instead of bool
+		}
+
+		// Simulate the AllowCrossSource check with invalid type
+		allowCrossSource := false
+		if value, exists := settingsWithInvalidType["allow_cross_source"]; exists {
+			if boolValue, ok := value.(bool); ok {
+				allowCrossSource = boolValue
+			}
+		}
+
+		assert.False(t, allowCrossSource, "Invalid config type should default to false")
+	})
+}

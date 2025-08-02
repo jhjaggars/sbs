@@ -87,16 +87,17 @@ func resolveSandboxName(session config.SessionMetadata, sandboxManager *sandbox.
 
 	// Try to get repository-aware sandbox name if we have repository info
 	if session.RepositoryName != "" {
-		// Create a repository instance from session metadata
-		repository := &repo.Repository{
-			Name: session.RepositoryName,
-			Root: session.RepositoryRoot,
+		if session.SandboxName != "" {
+			return session.SandboxName
 		}
-		return repository.GetSandboxName(session.IssueNumber)
+		return fmt.Sprintf("work-issue-%s", session.NamespacedID)
 	}
 
-	// Fall back to legacy sandbox naming for old sessions
-	return sandboxManager.GetSandboxName(session.IssueNumber)
+	// Use stored sandbox name if available
+	if session.SandboxName != "" {
+		return session.SandboxName
+	}
+	return fmt.Sprintf("work-issue-%s", session.NamespacedID)
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
@@ -182,7 +183,7 @@ func executeDefaultCleanup(dryRun, force bool) error {
 	// Show what will be cleaned
 	fmt.Printf("Found %d stale session(s):\n", len(staleSessions))
 	for _, session := range staleSessions {
-		fmt.Printf("  Issue #%d: %s\n", session.IssueNumber, session.IssueTitle)
+		fmt.Printf("  Work Item %s: %s\n", session.NamespacedID, session.IssueTitle)
 		fmt.Printf("    Worktree: %s\n", session.WorktreePath)
 		fmt.Printf("    Tmux Session: %s\n", session.TmuxSession)
 		sandboxName := resolveSandboxName(session, sandboxManager)
@@ -208,7 +209,7 @@ func executeDefaultCleanup(dryRun, force bool) error {
 	// Clean up stale sessions
 	fmt.Println("\nCleaning up stale sessions...")
 	for _, session := range staleSessions {
-		fmt.Printf("Cleaning up issue #%d...\n", session.IssueNumber)
+		fmt.Printf("Cleaning up work item %s...\n", session.NamespacedID)
 
 		// Remove worktree (direct filesystem removal)
 		if _, err := os.Stat(session.WorktreePath); err == nil {
@@ -266,13 +267,13 @@ func executeBranchCleanup(dryRun, force bool) error {
 
 	// Get active issue numbers with robust active session detection
 	tmuxManager := tmux.NewManager()
-	activeIssues := make([]int, 0, len(sessions))
+	activeWorkItems := make([]string, 0, len(sessions))
 	for _, session := range sessions {
 		// Only include active sessions
 		if session.Status == "active" {
 			// Optional: verify tmux session actually exists for more robust detection
 			if exists, _ := tmuxManager.SessionExists(session.TmuxSession); exists {
-				activeIssues = append(activeIssues, session.IssueNumber)
+				activeWorkItems = append(activeWorkItems, session.NamespacedID)
 			}
 		}
 	}
@@ -291,7 +292,7 @@ func executeBranchCleanup(dryRun, force bool) error {
 	}
 
 	// Find orphaned branches
-	orphanedBranches, err := gitManager.FindOrphanedIssueBranches(activeIssues)
+	orphanedBranches, err := gitManager.FindOrphanedIssueBranches(activeWorkItems)
 	if err != nil {
 		return fmt.Errorf("failed to find orphaned branches: %w", err)
 	}

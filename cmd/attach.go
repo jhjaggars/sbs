@@ -2,20 +2,22 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
-	"sbs/pkg/issue"
-	"sbs/pkg/repo"
 	"sbs/pkg/tmux"
 )
 
 var attachCmd = &cobra.Command{
-	Use:   "attach <issue-number>",
+	Use:   "attach <work-item-id>",
 	Short: "Attach to an existing work session",
-	Long: `Attach to the tmux session for the specified issue number.
-If the session doesn't exist, an error will be returned.`,
+	Long: `Attach to the tmux session for the specified work item.
+If the session doesn't exist, an error will be returned.
+
+REQUIRED: Work item ID must be in namespaced format (source:id):
+  sbs attach github:123
+  sbs attach test:quick`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAttach,
 }
@@ -25,11 +27,7 @@ func init() {
 }
 
 func runAttach(cmd *cobra.Command, args []string) error {
-	issueNumberStr := args[0]
-	issueNumber, err := strconv.Atoi(issueNumberStr)
-	if err != nil {
-		return fmt.Errorf("invalid issue number: %s", issueNumberStr)
-	}
+	workItemID := args[0]
 
 	// Load sessions
 	sessions, err := config.LoadSessions()
@@ -37,11 +35,16 @@ func runAttach(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
 
-	// Find session
-	issueTracker := issue.NewTracker(cfg)
-	session := issueTracker.FindSessionByIssue(sessions, issueNumber)
+	// Find session by namespaced ID
+	var session *config.SessionMetadata
+	for _, s := range sessions {
+		if s.NamespacedID == workItemID {
+			session = &s
+			break
+		}
+	}
 	if session == nil {
-		return fmt.Errorf("no session found for issue #%d", issueNumber)
+		return fmt.Errorf("no session found for work item %s", workItemID)
 	}
 
 	// Check if tmux session exists
@@ -56,7 +59,13 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update last activity
-	sessions = issueTracker.UpdateSessionActivity(sessions, issueNumber)
+	for i, s := range sessions {
+		if s.NamespacedID == workItemID {
+			// Update last activity timestamp
+			sessions[i].LastActivity = time.Now().Format(time.RFC3339)
+			break
+		}
+	}
 	if err := config.SaveSessions(sessions); err != nil {
 		// Don't fail if we can't save - just log
 		fmt.Printf("Warning: failed to update session activity: %v\n", err)
@@ -66,19 +75,9 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	var tmuxEnv map[string]string
 	if session.FriendlyTitle != "" {
 		tmuxEnv = tmux.CreateTmuxEnvironment(session.FriendlyTitle)
-		fmt.Printf("Attaching to session for issue #%d (SBS_TITLE=%s)...\n", issueNumber, session.FriendlyTitle)
+		fmt.Printf("Attaching to session for work item %s (SBS_TITLE=%s)...\n", workItemID, session.FriendlyTitle)
 	} else {
-		// Fallback: generate friendly title if not stored
-		// Load repository context to get repo name
-		repoManager := repo.NewManager()
-		currentRepo, err := repoManager.DetectCurrentRepository()
-		if err == nil {
-			friendlyTitle := tmux.GenerateFriendlyTitle(currentRepo.Name, issueNumber, session.IssueTitle)
-			tmuxEnv = tmux.CreateTmuxEnvironment(friendlyTitle)
-			fmt.Printf("Attaching to session for issue #%d (SBS_TITLE=%s, generated)...\n", issueNumber, friendlyTitle)
-		} else {
-			fmt.Printf("Attaching to session for issue #%d...\n", issueNumber)
-		}
+		fmt.Printf("Attaching to session for work item %s...\n", workItemID)
 	}
 
 	return tmuxManager.AttachToSession(session.TmuxSession, tmuxEnv)

@@ -43,7 +43,6 @@ type ResourceCreationEntry struct {
 }
 
 type SessionMetadata struct {
-	IssueNumber    int    `json:"issue_number"`
 	IssueTitle     string `json:"issue_title"`
 	FriendlyTitle  string `json:"friendly_title"` // Sandbox-friendly version of issue title
 	Branch         string `json:"branch"`
@@ -55,6 +54,10 @@ type SessionMetadata struct {
 	CreatedAt      string `json:"created_at"`
 	LastActivity   string `json:"last_activity"`
 	Status         string `json:"status"` // active, stopped, stale
+
+	// Input source fields for pluggable backends
+	SourceType   string `json:"source_type,omitempty"`   // github, test, jira, etc.
+	NamespacedID string `json:"namespaced_id,omitempty"` // Full namespaced ID (e.g., "github:123", "test:quick")
 
 	// Resource tracking fields for enhanced cleanup and failure recovery
 	ResourceStatus      string                  `json:"resource_status,omitempty"`       // creating, active, cleanup, failed
@@ -301,6 +304,15 @@ func LoadAllRepositorySessions() ([]SessionMetadata, error) {
 	// Use only the global sessions file as the single source of truth
 	// Repository scoping is handled by filtering based on RepositoryRoot field
 	return LoadSessions()
+}
+
+// GetGlobalSessionsPath returns the path to the global sessions file
+func GetGlobalSessionsPath() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config", "sbs", "sessions.json"), nil
 }
 
 // validateConfig validates that required fields are present for resource tracking features

@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"sbs/pkg/config"
 	"sbs/pkg/git"
+	"sbs/pkg/inputsource"
 	"sbs/pkg/issue"
 	"sbs/pkg/repo"
 	"sbs/pkg/tmux"
@@ -15,21 +18,26 @@ import (
 )
 
 var startCmd = &cobra.Command{
-	Use:   "start [issue-number]",
-	Short: "Start a new issue work environment",
-	Long: `Create or resume a work environment for a GitHub issue.
+	Use:   "start [work-item-id]",
+	Short: "Start a new work environment for any work item",
+	Long: `Create or resume a work environment for any work item from configured input sources.
 
-When run with an issue number:
-  sbs start 123
+REQUIRED: Work item ID must be in namespaced format (source:id):
+  sbs start github:123       # GitHub issue
+  sbs start test:quick       # Test work item
+  sbs start test:hooks       # Test Claude Code hooks
+  sbs start test:sandbox     # Test sandbox integration
 
-When run without arguments, launches interactive issue selection:
+When run without arguments, launches interactive work item selection:
   sbs start
 
 This command will:
-1. Create/switch to an issue branch (issue-<number>-<slug>)
+1. Create/switch to a work item branch (issue-{source}-{id}-{slug})
 2. Create/use a worktree in ~/.work-issue-worktrees/
-3. Create/attach to a tmux session (work-issue-<number>)
-4. Launch work-issue.sh in the session`,
+3. Create/attach to a tmux session (work-issue-{source}-{id})
+4. Launch work-issue.sh in the session
+
+Input sources are configured via .sbs/input-source.json in your project root.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runStart,
 }
@@ -61,28 +69,67 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Determine issue number - either from args or interactive selection
-	var issueNumber int
+	// Create input source factory and load project-specific input source
+	factory := inputsource.NewInputSourceFactory()
+	inputSourceInstance, err := factory.CreateFromProject(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to create input source: %w", err)
+	}
+
+	// Load input source configuration for validation settings
+	inputSourceConfig, err := config.LoadInputSourceConfig(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to load input source config: %w", err)
+	}
+
+	if verbose {
+		fmt.Printf("Debug: Using input source type: %s\n", inputSourceInstance.GetType())
+	}
+
+	// Parse work item ID - either from args or interactive selection
+	var workItem *inputsource.WorkItem
+
 	if len(args) == 0 {
-		// No arguments provided - launch interactive issue selection
-		selectedIssue, err := runInteractiveIssueSelection()
+		// No arguments provided - launch interactive work item selection
+		selectedWorkItem, err := runInteractiveWorkItemSelection(inputSourceInstance)
 		if err != nil {
-			return fmt.Errorf("failed to select issue: %w", err)
+			return fmt.Errorf("failed to select work item: %w", err)
 		}
-		if selectedIssue == nil {
+		if selectedWorkItem == nil {
 			// User quit the selection
-			fmt.Println("Issue selection cancelled.")
+			fmt.Println("Work item selection cancelled.")
 			return nil
 		}
-		issueNumber = selectedIssue.Number
-		fmt.Printf("Selected issue #%d: %s\n", selectedIssue.Number, selectedIssue.Title)
+		workItem = selectedWorkItem
+
+		fmt.Printf("Selected work item %s: %s\n", workItem.FullID(), workItem.Title)
 	} else {
-		// Issue number provided as argument
-		issueNumberStr := args[0]
-		var err error
-		issueNumber, err = strconv.Atoi(issueNumberStr)
+		// Work item ID provided as argument
+		workItemIDStr := args[0]
+
+		// Parse the work item ID (requires namespaced format)
+		parsedWorkItem, err := inputsource.ParseWorkItemID(workItemIDStr)
 		if err != nil {
-			return fmt.Errorf("invalid issue number: %s", issueNumberStr)
+			return fmt.Errorf("invalid work item ID: %s (%w)", workItemIDStr, err)
+		}
+
+		// If the parsed source doesn't match the project's input source, validate it's allowed
+		if parsedWorkItem.Source != inputSourceInstance.GetType() {
+			if !inputSourceConfig.AllowCrossSource() {
+				return fmt.Errorf("work item source '%s' doesn't match project input source '%s'. "+
+					"To allow cross-source usage, set allow_cross_source: true in .sbs/input-source.json",
+					parsedWorkItem.Source, inputSourceInstance.GetType())
+			}
+			if verbose {
+				fmt.Printf("Debug: Cross-source usage allowed: using %s work item with %s project\n",
+					parsedWorkItem.Source, inputSourceInstance.GetType())
+			}
+		}
+
+		// Fetch the full work item details
+		workItem, err = inputSourceInstance.GetWorkItem(parsedWorkItem.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get work item %s: %w", parsedWorkItem.FullID(), err)
 		}
 	}
 
@@ -93,18 +140,23 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	tmuxManager := tmux.NewManager()
-	issueTracker := issue.NewTracker(repoConfig)
+	// issueTracker := issue.NewTracker(repoConfig) // Not needed for new implementation
 
 	// Load global sessions
-	sessions, err := config.LoadSessions()
+	sessionsPath, err := config.GetGlobalSessionsPath()
+	if err != nil {
+		return fmt.Errorf("failed to get sessions path: %w", err)
+	}
+
+	sessions, err := config.LoadSessionsFromPath(sessionsPath)
 	if err != nil {
 		return fmt.Errorf("failed to load sessions: %w", err)
 	}
 
-	// Check if session already exists
-	existingSession := issueTracker.FindSessionByIssue(sessions, issueNumber)
+	// Check if session already exists by namespaced ID
+	existingSession := findSessionByWorkItem(sessions, workItem)
 	if existingSession != nil {
-		fmt.Printf("Found existing session for issue #%d\n", issueNumber)
+		fmt.Printf("Found existing session for work item %s\n", workItem.FullID())
 
 		// Check if tmux session exists
 		sessionExists, err := tmuxManager.SessionExists(existingSession.TmuxSession)
@@ -120,32 +172,27 @@ func runStart(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Get issue information from GitHub using gh command
-	githubIssue, err := issueTracker.GetIssue(issueNumber)
-	if err != nil {
-		fmt.Printf("Warning: Could not fetch issue from GitHub: %v\n", err)
-		githubIssue = &issue.Issue{
-			Number: issueNumber,
-			Title:  fmt.Sprintf("Issue #%d", issueNumber),
-			State:  "unknown",
-		}
+	fmt.Printf("Working on work item %s: %s\n", workItem.FullID(), workItem.Title)
+
+	// Use namespaced branch naming
+	branch := workItem.GetBranchName()
+	// Create the branch using the new name
+	err = createWorkItemBranch(gitManager, branch)
+	if verbose {
+		fmt.Printf("Debug: Using namespaced branch naming: %s\n", branch)
 	}
 
-	fmt.Printf("Working on issue #%d: %s\n", githubIssue.Number, githubIssue.Title)
-
-	// Generate friendly title for sandbox environment
-	friendlyTitle := tmux.GenerateFriendlyTitle(currentRepo.Name, issueNumber, githubIssue.Title)
-	fmt.Printf("Friendly title: %s\n", friendlyTitle)
-
-	// Create or switch to issue branch
-	branch, err := gitManager.CreateIssueBranch(issueNumber, githubIssue.Title)
 	if err != nil {
-		return fmt.Errorf("failed to create issue branch: %w", err)
+		return fmt.Errorf("failed to create work item branch: %w", err)
 	}
 	fmt.Printf("Using branch: %s\n", branch)
 
-	// Create worktree using repository-aware path
-	worktreePath := currentRepo.GetWorktreePath(issueNumber)
+	// Generate friendly title for sandbox environment
+	friendlyTitle := generateWorkItemFriendlyTitle(currentRepo.Name, workItem)
+	fmt.Printf("Friendly title: %s\n", friendlyTitle)
+
+	// Create worktree path based on work item
+	worktreePath := generateWorkItemWorktreePath(currentRepo, workItem)
 	if verbose {
 		fmt.Printf("Debug: Creating worktree at path: %s\n", worktreePath)
 		fmt.Printf("Debug: Using branch: %s\n", branch)
@@ -160,26 +207,26 @@ func runStart(cmd *cobra.Command, args []string) error {
 	// Create environment variables for tmux session
 	tmuxEnv := tmux.CreateTmuxEnvironment(friendlyTitle)
 
-	// Create tmux session with repository-scoped name and environment variables
-	tmuxSessionName := currentRepo.GetTmuxSessionName(issueNumber)
-	session, err := tmuxManager.CreateSession(issueNumber, worktreePath, tmuxSessionName, tmuxEnv)
+	// Create tmux session with work item-specific name
+	tmuxSessionName := generateWorkItemTmuxSessionName(currentRepo, workItem)
+	session, err := createWorkItemTmuxSession(tmuxManager, workItem, worktreePath, tmuxSessionName, tmuxEnv)
 	if err != nil {
 		return fmt.Errorf("failed to create tmux session: %w", err)
 	}
 	fmt.Printf("Tmux session created: %s (SBS_TITLE=%s)\n", session.Name, friendlyTitle)
 
-	// Get repository-scoped sandbox name
-	sandboxName := currentRepo.GetSandboxName(issueNumber)
+	// Get work item-specific sandbox name
+	sandboxName := generateWorkItemSandboxName(currentRepo, workItem)
 
-	// Create or update session metadata
-	sessionMetadata := issueTracker.CreateSessionMetadata(
-		issueNumber, githubIssue, branch, worktreePath, session.Name, sandboxName, currentRepo.Name, currentRepo.Root, friendlyTitle)
+	// Create session metadata with input source information
+	sessionMetadata := createWorkItemSessionMetadata(workItem, branch, worktreePath, session.Name,
+		sandboxName, currentRepo.Name, currentRepo.Root, friendlyTitle)
 
 	// Update sessions list
 	if existingSession != nil {
-		// Update existing session
+		// Update existing session by namespaced ID
 		for i, s := range sessions {
-			if s.IssueNumber == issueNumber {
+			if s.NamespacedID == workItem.FullID() {
 				sessions[i] = *sessionMetadata
 				break
 			}
@@ -220,7 +267,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 			// Create substitution map for parameters
 			substitutions := map[string]string{
-				"$1": fmt.Sprintf("%d", issueNumber),
+				"$1": workItem.ID,
 			}
 
 			if err := tmuxManager.ExecuteCommandWithSubstitution(session.Name, repoConfig.TmuxCommand, repoConfig.TmuxCommandArgs, substitutions, tmuxEnv); err != nil {
@@ -229,17 +276,61 @@ func runStart(cmd *cobra.Command, args []string) error {
 		} else {
 			// Default behavior - execute work-issue.sh
 			fmt.Printf("Starting work-issue.sh in session...\n")
-			if err := tmuxManager.StartWorkIssue(session.Name, issueNumber, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
+			// Use 0 as dummy issue number since work-issue.sh will use environment variables for context
+			if err := tmuxManager.StartWorkIssue(session.Name, 0, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
 			}
 		}
 	}
 
-	fmt.Printf("\nWork environment ready! Use 'sbs attach %d' to connect.\n", issueNumber)
+	// Show attach command
+	fmt.Printf("\nWork environment ready! Use 'sbs attach %s' to connect.\n", workItem.FullID())
 	return nil
 }
 
-// runInteractiveIssueSelection launches the TUI for issue selection
+// runInteractiveWorkItemSelection launches the TUI for work item selection
+func runInteractiveWorkItemSelection(inputSource inputsource.InputSource) (*inputsource.WorkItem, error) {
+	// For now, fall back to GitHub client for interactive selection
+	// TODO: Implement generic work item selection TUI
+	if inputSource.GetType() != "github" {
+		return nil, fmt.Errorf("interactive selection not yet supported for %s input sources", inputSource.GetType())
+	}
+
+	// Use existing GitHub interactive selection as fallback
+	githubClient := issue.NewGitHubClient()
+	model := tui.NewIssueSelectModel(githubClient)
+
+	program := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := program.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run work item selection interface: %w", err)
+	}
+
+	issueSelectModel, ok := finalModel.(*tui.IssueSelectModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type returned from TUI")
+	}
+
+	if issueSelectModel.IsQuit() {
+		return nil, nil
+	}
+
+	selectedIssue := issueSelectModel.GetSelectedIssue()
+	if selectedIssue == nil {
+		return nil, fmt.Errorf("no work item was selected")
+	}
+
+	// Convert GitHub issue to WorkItem
+	return &inputsource.WorkItem{
+		Source: "github",
+		ID:     strconv.Itoa(selectedIssue.Number),
+		Title:  selectedIssue.Title,
+		State:  selectedIssue.State,
+		URL:    selectedIssue.URL,
+	}, nil
+}
+
+// runInteractiveIssueSelection launches the TUI for issue selection (legacy compatibility)
 func runInteractiveIssueSelection() (*issue.Issue, error) {
 	// Initialize GitHub client
 	githubClient := issue.NewGitHubClient()
@@ -270,4 +361,104 @@ func runInteractiveIssueSelection() (*issue.Issue, error) {
 	}
 
 	return selectedIssue, nil
+}
+
+// Helper functions for work item integration
+
+// findSessionByWorkItem finds a session by work item using namespaced ID
+func findSessionByWorkItem(sessions []config.SessionMetadata, workItem *inputsource.WorkItem) *config.SessionMetadata {
+	// Find by namespaced ID
+	for _, session := range sessions {
+		if session.NamespacedID == workItem.FullID() {
+			return &session
+		}
+	}
+
+	return nil
+}
+
+// createWorkItemBranch creates a branch for a work item using direct git commands
+func createWorkItemBranch(gitManager *git.Manager, branchName string) error {
+	// Check if branch already exists
+	exists, err := gitManager.BranchExists(branchName)
+	if err != nil {
+		return fmt.Errorf("failed to check if branch exists: %w", err)
+	}
+
+	if exists {
+		return nil // Branch already exists
+	}
+
+	// Create the branch using the generic branch creation method
+	// We use a dummy issue number (0) since the branch name is already constructed
+	_, err = gitManager.CreateIssueBranch(0, "")
+	if err != nil {
+		return fmt.Errorf("failed to create branch %s: %w", branchName, err)
+	}
+
+	return nil
+}
+
+// generateWorkItemFriendlyTitle creates a friendly title for the work item
+func generateWorkItemFriendlyTitle(repoName string, workItem *inputsource.WorkItem) string {
+	// Create a consistent format for all work item sources
+	title := strings.ReplaceAll(workItem.Title, " ", "-")
+	title = strings.ToLower(title)
+
+	// Limit length
+	if len(title) > inputsource.MaxFriendlyTitleLength {
+		title = title[:inputsource.MaxFriendlyTitleLength]
+	}
+
+	return fmt.Sprintf("%s-%s-%s", repoName, workItem.Source, workItem.ID)
+}
+
+// generateWorkItemWorktreePath creates a worktree path for the work item
+func generateWorkItemWorktreePath(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
+	// Create a consistent path format for all work item sources
+	baseDir := filepath.Dir(currentRepo.GetWorktreePath(1)) // Get the base worktree directory
+	return filepath.Join(baseDir, fmt.Sprintf("issue-%s-%s", workItem.Source, workItem.ID))
+}
+
+// generateWorkItemTmuxSessionName creates a tmux session name for the work item
+func generateWorkItemTmuxSessionName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
+	// Create a consistent naming format for all work item sources
+	return fmt.Sprintf("work-issue-%s-%s-%s",
+		currentRepo.Name, workItem.Source, workItem.ID)
+}
+
+// generateWorkItemSandboxName creates a sandbox name for the work item
+func generateWorkItemSandboxName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
+	// Create a consistent naming format for all work item sources
+	return fmt.Sprintf("work-issue-%s-%s-%s",
+		currentRepo.Name, workItem.Source, workItem.ID)
+}
+
+// createWorkItemTmuxSession creates a tmux session for the work item
+func createWorkItemTmuxSession(tmuxManager *tmux.Manager, workItem *inputsource.WorkItem,
+	worktreePath, sessionName string, tmuxEnv map[string]string) (*tmux.Session, error) {
+
+	// Use 0 as dummy issue number since all work items are handled generically now
+	return tmuxManager.CreateSession(0, worktreePath, sessionName, tmuxEnv)
+}
+
+// createWorkItemSessionMetadata creates session metadata for the work item
+func createWorkItemSessionMetadata(workItem *inputsource.WorkItem, branch, worktreePath,
+	tmuxSession, sandboxName, repoName, repoRoot, friendlyTitle string) *config.SessionMetadata {
+
+	return &config.SessionMetadata{
+		IssueTitle:     workItem.Title,
+		FriendlyTitle:  friendlyTitle,
+		Branch:         branch,
+		WorktreePath:   worktreePath,
+		TmuxSession:    tmuxSession,
+		SandboxName:    sandboxName,
+		RepositoryName: repoName,
+		RepositoryRoot: repoRoot,
+		CreatedAt:      "", // TODO: Set timestamp
+		LastActivity:   "", // TODO: Set timestamp
+		Status:         "active",
+		SourceType:     workItem.Source,
+		NamespacedID:   workItem.FullID(),
+	}
 }
