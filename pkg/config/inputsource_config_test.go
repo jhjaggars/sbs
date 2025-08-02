@@ -232,3 +232,69 @@ func TestInputSourceConfig_SaveAndLoad(t *testing.T) {
 	assert.Equal(t, float64(42), loadedConfig.Settings["number"]) // JSON unmarshals numbers as float64
 	assert.Equal(t, true, loadedConfig.Settings["boolean"])
 }
+
+func TestInputSourceConfig_AllowCrossSource(t *testing.T) {
+	t.Run("allow_cross_source_true", func(t *testing.T) {
+		config := &InputSourceConfig{
+			Type: "github",
+			Settings: map[string]interface{}{
+				"allow_cross_source": true,
+			},
+		}
+
+		assert.True(t, config.AllowCrossSource())
+	})
+
+	t.Run("allow_cross_source_false", func(t *testing.T) {
+		config := &InputSourceConfig{
+			Type: "github",
+			Settings: map[string]interface{}{
+				"allow_cross_source": false,
+			},
+		}
+
+		assert.False(t, config.AllowCrossSource())
+	})
+
+	t.Run("allow_cross_source_missing", func(t *testing.T) {
+		config := &InputSourceConfig{
+			Type: "github",
+			Settings: map[string]interface{}{
+				"repository": "auto-detect",
+			},
+		}
+
+		assert.False(t, config.AllowCrossSource())
+	})
+
+	t.Run("allow_cross_source_wrong_type", func(t *testing.T) {
+		config := &InputSourceConfig{
+			Type: "github",
+			Settings: map[string]interface{}{
+				"allow_cross_source": "yes", // string instead of bool
+			},
+		}
+
+		assert.False(t, config.AllowCrossSource())
+	})
+
+	t.Run("nil_settings", func(t *testing.T) {
+		config := &InputSourceConfig{
+			Type:     "github",
+			Settings: nil,
+		}
+
+		assert.False(t, config.AllowCrossSource())
+	})
+
+	t.Run("default_config_behavior", func(t *testing.T) {
+		// Test that the default config has the expected cross-source setting
+		config := DefaultInputSourceConfig()
+
+		assert.False(t, config.AllowCrossSource(), "Default config should deny cross-source usage")
+
+		// Verify the setting is explicitly set
+		assert.Contains(t, config.Settings, "allow_cross_source")
+		assert.Equal(t, false, config.Settings["allow_cross_source"])
+	})
+}

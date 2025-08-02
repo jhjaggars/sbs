@@ -19,7 +19,8 @@ func DefaultInputSourceConfig() *InputSourceConfig {
 	return &InputSourceConfig{
 		Type: "github",
 		Settings: map[string]interface{}{
-			"repository": "auto-detect", // Auto-detect from git remote
+			"repository":         "auto-detect", // Auto-detect from git remote
+			"allow_cross_source": false,         // By default, don't allow cross-source usage
 		},
 	}
 }
@@ -105,4 +106,19 @@ func validateInputSourceConfig(config *InputSourceConfig) error {
 	}
 
 	return nil
+}
+
+// AllowCrossSource returns whether cross-source usage is allowed based on configuration
+func (config *InputSourceConfig) AllowCrossSource() bool {
+	if config.Settings == nil {
+		return false
+	}
+
+	if value, exists := config.Settings["allow_cross_source"]; exists {
+		if boolValue, ok := value.(bool); ok {
+			return boolValue
+		}
+	}
+
+	return false
 }

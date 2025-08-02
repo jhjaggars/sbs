@@ -78,6 +78,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create input source: %w", err)
 	}
 
+	// Load input source configuration for validation settings
+	inputSourceConfig, err := config.LoadInputSourceConfig(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to load input source config: %w", err)
+	}
+
 	if verbose {
 		fmt.Printf("Debug: Using input source type: %s\n", inputSourceInstance.GetType())
 	}
@@ -123,8 +129,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 		// If the parsed source doesn't match the project's input source, validate it's allowed
 		if parsedWorkItem.Source != inputSourceInstance.GetType() {
-			return fmt.Errorf("work item source '%s' doesn't match project input source '%s'",
-				parsedWorkItem.Source, inputSourceInstance.GetType())
+			if !inputSourceConfig.AllowCrossSource() {
+				return fmt.Errorf("work item source '%s' doesn't match project input source '%s'. "+
+					"To allow cross-source usage, set allow_cross_source: true in .sbs/input-source.json",
+					parsedWorkItem.Source, inputSourceInstance.GetType())
+			}
+			if verbose {
+				fmt.Printf("Debug: Cross-source usage allowed: using %s work item with %s project\n",
+					parsedWorkItem.Source, inputSourceInstance.GetType())
+			}
 		}
 
 		// Fetch the full work item details
@@ -156,7 +169,12 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	sessions, err := config.LoadSessionsWithMigration(sessionsPath)
 	if err != nil {
-		return fmt.Errorf("failed to load sessions: %w", err)
+		// Check if this is a migration warning (not a fatal error)
+		if strings.Contains(err.Error(), "warning:") {
+			fmt.Printf("%v\n", err) // Print the warning but continue
+		} else {
+			return fmt.Errorf("failed to load sessions: %w", err)
+		}
 	}
 
 	// Check if session already exists by namespaced ID (preferred) or issue number (fallback)
@@ -456,8 +474,8 @@ func generateWorkItemFriendlyTitle(repoName string, workItem *inputsource.WorkIt
 	title = strings.ToLower(title)
 
 	// Limit length
-	if len(title) > 50 {
-		title = title[:50]
+	if len(title) > inputsource.MaxFriendlyTitleLength {
+		title = title[:inputsource.MaxFriendlyTitleLength]
 	}
 
 	return fmt.Sprintf("%s-%s-%s", repoName, workItem.Source, workItem.ID)

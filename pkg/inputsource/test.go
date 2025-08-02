@@ -2,6 +2,7 @@ package inputsource
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -76,8 +77,16 @@ func (t *TestInputSource) ListWorkItems(searchQuery string, limit int) ([]*WorkI
 
 	searchQuery = strings.ToLower(strings.TrimSpace(searchQuery))
 
-	// Iterate through all items
-	for _, item := range t.items {
+	// Sort keys to ensure deterministic iteration order
+	keys := make([]string, 0, len(t.items))
+	for k := range t.items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Iterate through all items in sorted order
+	for _, key := range keys {
+		item := t.items[key]
 		// Apply search filter if provided
 		if searchQuery != "" {
 			titleLower := strings.ToLower(item.Title)

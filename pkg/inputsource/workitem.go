@@ -7,6 +7,21 @@ import (
 	"strings"
 )
 
+const (
+	// MaxTitleSlugLength defines the maximum length for title slugs in branch names
+	MaxTitleSlugLength = 100
+	// MaxFriendlyTitleLength defines the maximum length for friendly titles
+	MaxFriendlyTitleLength = 50
+	// DefaultSearchLimit defines the default limit for search operations in tests
+	DefaultSearchLimit = 10
+)
+
+var (
+	// titleSlugRegex is a compiled regex for creating title slugs
+	// This is cached to avoid recompiling on each call
+	titleSlugRegex = regexp.MustCompile(`[^a-z0-9]+`)
+)
+
 // WorkItem represents a work item from any input source with namespaced ID
 type WorkItem struct {
 	Source string `json:"source"` // github, test, jira, etc.
@@ -116,17 +131,15 @@ func createTitleSlug(title string) string {
 	// Convert to lowercase
 	title = strings.ToLower(title)
 
-	// Replace non-alphanumeric characters with hyphens
-	reg := regexp.MustCompile(`[^a-z0-9]+`)
-	title = reg.ReplaceAllString(title, "-")
+	// Replace non-alphanumeric characters with hyphens using cached regex
+	title = titleSlugRegex.ReplaceAllString(title, "-")
 
 	// Remove leading/trailing hyphens
 	title = strings.Trim(title, "-")
 
 	// Limit length for practical git branch naming
-	maxLength := 100
-	if len(title) > maxLength {
-		title = title[:maxLength]
+	if len(title) > MaxTitleSlugLength {
+		title = title[:MaxTitleSlugLength]
 		// Remove trailing hyphen if we cut in the middle of a word
 		title = strings.TrimSuffix(title, "-")
 	}

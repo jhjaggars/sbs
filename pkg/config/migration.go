@@ -188,9 +188,9 @@ func LoadSessionsWithMigration(sessionsPath string) ([]SessionMetadata, error) {
 	// Save migrated sessions if migration occurred
 	if migrationOccurred {
 		if err := SaveSessionsToPath(migratedSessions, sessionsPath); err != nil {
-			// Log warning but don't fail - we can still return the migrated sessions
-			// In a real implementation, we might use a logger here
-			// fmt.Printf("Warning: failed to save migrated sessions: %v\n", err)
+			// Return a warning error but still return the migrated sessions
+			// The caller can decide whether to treat this as fatal
+			return migratedSessions, fmt.Errorf("warning: migration completed but failed to save migrated sessions: %w", err)
 		}
 	}
 
