@@ -235,13 +235,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.stopLogAutoRefresh()
 					return m, nil
 				case "r":
-					// Manual refresh
+					// Manual refresh and restart auto-refresh if it was stopped
 					m.logAutoRefreshMutex.Lock()
 					if m.logView != nil {
 						if !m.logView.refreshing {
 							m.logView.refreshing = true
+							// Re-enable auto-refresh when user manually retries
+							m.logAutoRefreshActive = true
 							m.logAutoRefreshMutex.Unlock()
-							return m, m.refreshLogContent()
+							return m, tea.Batch(
+								m.refreshLogContent(),
+								m.startLogAutoRefresh(),
+							)
 						}
 					}
 					m.logAutoRefreshMutex.Unlock()
@@ -394,6 +399,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if msg.err != nil {
 				m.logView.errorMessage = fmt.Sprintf("refresh failed: %v", msg.err)
+
+				// Stop auto-refresh for persistent errors that won't be resolved by retrying
+				if strings.Contains(msg.err.Error(), "script not found") ||
+					strings.Contains(msg.err.Error(), "path validation failed") {
+					m.logAutoRefreshActive = false
+				}
 			} else {
 				// Apply content size limits and rotation
 				content := msg.content
@@ -900,6 +911,9 @@ func (m Model) renderLogView() string {
 		b.WriteString(mutedStyle.Render("Loading log content...") + "\n")
 	} else if m.logView.errorMessage != "" {
 		b.WriteString(errorStyle.Render("Error: "+m.logView.errorMessage) + "\n")
+		if !m.logAutoRefreshActive {
+			b.WriteString(mutedStyle.Render("Auto-refresh stopped due to persistent error.") + "\n")
+		}
 		b.WriteString(mutedStyle.Render("Press 'r' to retry, ESC or 'q' to exit") + "\n")
 	} else if m.logView.content == "" {
 		b.WriteString(mutedStyle.Render("No log content available") + "\n")

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -114,8 +115,32 @@ func TestLogView_AutoRefresh(t *testing.T) {
 		assert.NotEmpty(t, logView.errorMessage, "Should display error message")
 		assert.Contains(t, logView.errorMessage, "refresh failed", "Error message should indicate refresh failure")
 
-		// Test retry behavior - should continue trying to refresh
-		assert.True(t, newModel.(Model).logAutoRefreshActive, "Should continue auto-refresh even after error")
+		// Test retry behavior - should continue trying to refresh for non-persistent errors
+		assert.True(t, newModel.(Model).logAutoRefreshActive, "Should continue auto-refresh for transient errors")
+	})
+
+	t.Run("refresh_error_handling_persistent_errors", func(t *testing.T) {
+		// Test that auto-refresh stops for persistent errors like missing scripts
+		model := NewModel()
+		model.sessions = testSessions
+		model.cursor = 0
+		model.viewMode = ViewModeLog
+		model.logView = &LogView{}
+		model.logAutoRefreshActive = true
+
+		// Simulate persistent error (script not found)
+		resultMsg := logRefreshResultMsg{
+			content: "",
+			err:     fmt.Errorf("loghook script not found at /path/to/.sbs/loghook"),
+		}
+		newModel, _ := model.Update(resultMsg)
+
+		// Verify error display
+		logView := newModel.(Model).logView
+		assert.NotEmpty(t, logView.errorMessage, "Should display error message")
+
+		// Auto-refresh should be stopped for persistent errors
+		assert.False(t, newModel.(Model).logAutoRefreshActive, "Should stop auto-refresh for persistent errors")
 	})
 
 	t.Run("log_refresh_tick_message_handling", func(t *testing.T) {
