@@ -130,7 +130,7 @@ func CalculateRepositoryViewWidths(terminalWidth int) ColumnWidths {
 
 	// Minimum widths for readability
 	const (
-		minIssue        = 6
+		minIssue        = 20 // Increased to accommodate test work items like "test:descriptive-name"
 		minTitle        = 20
 		minBranch       = 12
 		minStatus       = 10
@@ -175,7 +175,7 @@ func CalculateGlobalViewWidths(terminalWidth int) ColumnWidths {
 
 	// Minimum widths for readability
 	const (
-		minIssue        = 6
+		minIssue        = 20 // Increased to accommodate test work items like "test:descriptive-name"
 		minTitle        = 15
 		minRepository   = 12
 		minBranch       = 10
