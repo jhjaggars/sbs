@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -478,7 +479,7 @@ func createWorkItemSessionMetadata(workItem *inputsource.WorkItem, branch, workt
 func resolveWorkIssueScript(repoRoot, configuredScript string) string {
 	// First check for .sbs/work-issue.sh in repository root
 	localScript := filepath.Join(repoRoot, ".sbs", "work-issue.sh")
-	if fileExists(localScript) {
+	if _, err := os.Stat(localScript); err == nil {
 		return localScript
 	}
 

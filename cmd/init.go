@@ -62,13 +62,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err := os.MkdirAll(sbsDir, 0755); err != nil {
 			return fmt.Errorf("failed to create .sbs directory: %w", err)
 		}
+
+		// Validate directory creation
+		if !fileExists(sbsDir) {
+			return fmt.Errorf("failed to verify .sbs directory creation at: %s", sbsDir)
+		}
+
 		fmt.Printf("Created directory: %s\n", sbsDir)
 	}
 
 	// Copy work-issue.sh
 	srcWorkIssue := filepath.Join(cwd, "work-issue.sh")
 	if !fileExists(srcWorkIssue) {
-		return fmt.Errorf("work-issue.sh not found in repository root")
+		return fmt.Errorf("work-issue.sh not found at expected path: %s", srcWorkIssue)
 	}
 
 	if dryRun {
@@ -83,7 +89,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Copy claude-code-stop-hook.sh
 	srcHook := filepath.Join(cwd, "scripts", "claude-code-stop-hook.sh")
 	if !fileExists(srcHook) {
-		return fmt.Errorf("scripts/claude-code-stop-hook.sh not found")
+		return fmt.Errorf("claude-code-stop-hook.sh not found at expected path: %s", srcHook)
 	}
 
 	if dryRun {
@@ -111,12 +117,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 func isGitRepository(path string) bool {
 	gitDir := filepath.Join(path, ".git")
 	if stat, err := os.Stat(gitDir); err == nil {
-		return stat.IsDir()
-	}
-
-	// Check if .git is a file (in case of worktrees)
-	if _, err := os.Stat(gitDir); err == nil {
-		return true
+		// .git exists - it can be either a directory (normal repo) or file (worktree)
+		return stat.IsDir() || stat.Mode().IsRegular()
 	}
 
 	return false
