@@ -1056,6 +1056,11 @@ func executeLoghookScript(session config.SessionMetadata) (string, error) {
 	return executeLoghookScriptWithOptions(session, 10, 1048576) // 10s timeout, 1MB limit
 }
 
+// ExecuteLoghookScript executes the loghook script for a session (exported wrapper)
+func ExecuteLoghookScript(session config.SessionMetadata) (string, error) {
+	return executeLoghookScript(session)
+}
+
 // executeLoghookScriptWithTimeout executes the loghook script with a custom timeout
 func executeLoghookScriptWithTimeout(session config.SessionMetadata, timeoutSecs int) (string, error) {
 	return executeLoghookScriptWithOptions(session, timeoutSecs, 1048576) // Custom timeout, 1MB limit
