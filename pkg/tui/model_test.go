@@ -19,7 +19,7 @@ var testSessions = []config.SessionMetadata{
 		IssueTitle:     "Fix authentication bug in user login",
 		RepositoryName: "test-repo",
 		Branch:         "issue-123-fix-auth-bug",
-		TmuxSession:    "work-issue-123",
+		TmuxSession:    "sbs-123",
 		LastActivity:   "2025-07-31T10:00:00Z",
 	},
 	{
@@ -27,7 +27,7 @@ var testSessions = []config.SessionMetadata{
 		IssueTitle:     "Add dark mode support to dashboard",
 		RepositoryName: "test-repo",
 		Branch:         "issue-124-dark-mode",
-		TmuxSession:    "work-issue-124",
+		TmuxSession:    "sbs-124",
 		LastActivity:   "2025-07-31T09:30:00Z",
 	},
 }

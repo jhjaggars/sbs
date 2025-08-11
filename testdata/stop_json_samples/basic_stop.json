@@ -7,7 +7,7 @@
     "sandbox_detection": true
   },
   "hook_data": {
-    "session_id": "work-issue-123",
+    "session_id": "sbs-123",
     "tool_executions": 15,
     "last_tool": "Edit",
     "project_files_modified": 3

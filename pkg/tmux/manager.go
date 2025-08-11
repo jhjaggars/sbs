@@ -164,14 +164,14 @@ func (m *Manager) ListSessions() ([]*Session, error) {
 
 		sessionName := parts[0]
 
-		// Only process work-issue sessions
-		if !strings.HasPrefix(sessionName, "work-issue-") {
+		// Only process sbs sessions
+		if !strings.HasPrefix(sessionName, "sbs-") {
 			continue
 		}
 
 		// Extract issue number from different formats:
-		// work-issue-123 (legacy)
-		// work-issue-repo-123 (new format)
+		// sbs-123 (legacy)
+		// sbs-repo-123 (new format)
 		issueNumber := m.extractIssueNumber(sessionName)
 		if issueNumber == 0 {
 			continue

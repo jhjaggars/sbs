@@ -52,18 +52,18 @@ func (m *Manager) DetectCurrentRepository() (*Repository, error) {
 
 // GetTmuxSessionName returns the repository-scoped tmux session name
 func (r *Repository) GetTmuxSessionName(issueNumber int) string {
-	return fmt.Sprintf("work-issue-%s-%d", r.Name, issueNumber)
+	return fmt.Sprintf("sbs-%s-%d", r.Name, issueNumber)
 }
 
 // GetSandboxName returns the repository-scoped sandbox name
 func (r *Repository) GetSandboxName(issueNumber int) string {
-	return fmt.Sprintf("work-issue-%s-%d", r.Name, issueNumber)
+	return fmt.Sprintf("sbs-%s-%d", r.Name, issueNumber)
 }
 
 // GetWorktreePath returns the repository-scoped worktree path
 func (r *Repository) GetWorktreePath(issueNumber int) string {
 	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".work-issue-worktrees", r.Name, fmt.Sprintf("issue-%d", issueNumber))
+	return filepath.Join(homeDir, ".sbs-worktrees", r.Name, fmt.Sprintf("issue-%d", issueNumber))
 }
 
 // findGitRoot finds the root directory of the current git repository

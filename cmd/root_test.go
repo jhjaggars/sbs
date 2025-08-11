@@ -27,7 +27,7 @@ func TestInitConfig_CommandLogging(t *testing.T) {
 
 		configPath := filepath.Join(configDir, "config.json")
 		configContent := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"command_logging": true,
 			"command_log_level": "debug",
@@ -75,7 +75,7 @@ func TestInitConfig_CommandLogging(t *testing.T) {
 
 		configPath := filepath.Join(configDir, "config.json")
 		configContent := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"command_logging": false
 		}`
@@ -123,7 +123,7 @@ func TestInitConfig_CommandLogging(t *testing.T) {
 
 		configPath := filepath.Join(configDir, "config.json")
 		configContent := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"command_logging": true
 		}`

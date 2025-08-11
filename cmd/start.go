@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,8 +34,8 @@ When run without arguments, launches interactive work item selection:
 
 This command will:
 1. Create/switch to a work item branch (issue-{source}-{id}-{slug})
-2. Create/use a worktree in ~/.work-issue-worktrees/
-3. Create/attach to a tmux session (work-issue-{source}-{id})
+2. Create/use a worktree in ~/.sbs-worktrees/
+3. Create/attach to a tmux session (sbs-{source}-{id})
 4. Launch work-issue.sh in the session
 
 Input sources are configured via .sbs/input-source.json in your project root.
@@ -284,9 +285,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			// Default behavior - execute work-issue.sh
-			fmt.Printf("Starting work-issue.sh in session...\n")
+			workIssueScript := resolveWorkIssueScript(currentRepo.Root, repoConfig.WorkIssueScript)
+			fmt.Printf("Starting work-issue.sh in session (using: %s)...\n", workIssueScript)
 			// Use 0 as dummy issue number since work-issue.sh will use environment variables for context
-			if err := tmuxManager.StartWorkIssue(session.Name, 0, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
+
+			if err := tmuxManager.StartWorkIssue(session.Name, 0, workIssueScript, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
 			}
 		}
@@ -431,14 +434,14 @@ func generateWorkItemWorktreePath(currentRepo *repo.Repository, workItem *inputs
 // generateWorkItemTmuxSessionName creates a tmux session name for the work item
 func generateWorkItemTmuxSessionName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
 	// Create a consistent naming format for all work item sources
-	return fmt.Sprintf("work-issue-%s-%s-%s",
+	return fmt.Sprintf("sbs-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
 
 // generateWorkItemSandboxName creates a sandbox name for the work item
 func generateWorkItemSandboxName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
 	// Create a consistent naming format for all work item sources
-	return fmt.Sprintf("work-issue-%s-%s-%s",
+	return fmt.Sprintf("sbs-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
 
@@ -469,4 +472,17 @@ func createWorkItemSessionMetadata(workItem *inputsource.WorkItem, branch, workt
 		SourceType:     workItem.Source,
 		NamespacedID:   workItem.FullID(),
 	}
+}
+
+// resolveWorkIssueScript determines which work-issue.sh script to use
+// Priority: .sbs/work-issue.sh -> configured script -> default
+func resolveWorkIssueScript(repoRoot, configuredScript string) string {
+	// First check for .sbs/work-issue.sh in repository root
+	localScript := filepath.Join(repoRoot, ".sbs", "work-issue.sh")
+	if _, err := os.Stat(localScript); err == nil {
+		return localScript
+	}
+
+	// Fall back to configured script
+	return configuredScript
 }

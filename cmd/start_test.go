@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -275,5 +277,74 @@ func TestStartCommand_InputSourceConfig(t *testing.T) {
 		}
 
 		assert.False(t, allowCrossSource, "Invalid config type should default to false")
+	})
+}
+
+func TestResolveWorkIssueScript(t *testing.T) {
+	t.Run("uses_local_script_when_exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create .sbs directory with work-issue.sh
+		sbsDir := filepath.Join(tmpDir, ".sbs")
+		err := os.Mkdir(sbsDir, 0755)
+		require.NoError(t, err)
+
+		localScript := filepath.Join(sbsDir, "work-issue.sh")
+		err = os.WriteFile(localScript, []byte("#!/bin/bash\necho 'local'"), 0755)
+		require.NoError(t, err)
+
+		configuredScript := "/global/work-issue.sh"
+		result := resolveWorkIssueScript(tmpDir, configuredScript)
+
+		assert.Equal(t, localScript, result, "Should use local .sbs/work-issue.sh when it exists")
+	})
+
+	t.Run("falls_back_to_configured_script", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Don't create .sbs/work-issue.sh
+		configuredScript := "/global/work-issue.sh"
+		result := resolveWorkIssueScript(tmpDir, configuredScript)
+
+		assert.Equal(t, configuredScript, result, "Should fall back to configured script when local doesn't exist")
+	})
+
+	t.Run("falls_back_when_sbs_dir_missing", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Don't create .sbs directory at all
+		configuredScript := "/global/work-issue.sh"
+		result := resolveWorkIssueScript(tmpDir, configuredScript)
+
+		assert.Equal(t, configuredScript, result, "Should fall back to configured script when .sbs directory doesn't exist")
+	})
+
+	t.Run("priority_order_integration", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		configuredScript := "/configured/work-issue.sh"
+
+		// Test 1: No local script - should use configured
+		result1 := resolveWorkIssueScript(tmpDir, configuredScript)
+		assert.Equal(t, configuredScript, result1)
+
+		// Test 2: Create local script - should now use local
+		sbsDir := filepath.Join(tmpDir, ".sbs")
+		err := os.Mkdir(sbsDir, 0755)
+		require.NoError(t, err)
+
+		localScript := filepath.Join(sbsDir, "work-issue.sh")
+		err = os.WriteFile(localScript, []byte("#!/bin/bash"), 0755)
+		require.NoError(t, err)
+
+		result2 := resolveWorkIssueScript(tmpDir, configuredScript)
+		assert.Equal(t, localScript, result2)
+
+		// Test 3: Remove local script - should fall back to configured again
+		err = os.Remove(localScript)
+		require.NoError(t, err)
+
+		result3 := resolveWorkIssueScript(tmpDir, configuredScript)
+		assert.Equal(t, configuredScript, result3)
 	})
 }

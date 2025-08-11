@@ -139,8 +139,8 @@ func TestModalDialogContent(t *testing.T) {
 		model := setupTestModel()
 		// Set up sessions that will be detected as stale (tmux sessions don't exist)
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, IssueTitle: "Test issue 123", TmuxSession: "work-issue-123"},
-			{IssueNumber: 124, IssueTitle: "Test issue 124", TmuxSession: "work-issue-124"},
+			{IssueNumber: 123, IssueTitle: "Test issue 123", TmuxSession: "sbs-123"},
+			{IssueNumber: 124, IssueTitle: "Test issue 124", TmuxSession: "sbs-124"},
 		}
 
 		// This will fail until we implement showCleanConfirmation
@@ -156,7 +156,7 @@ func TestModalDialogContent(t *testing.T) {
 		model := setupTestModel()
 		// Set up single session that will be detected as stale
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, IssueTitle: "Single test issue", TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, IssueTitle: "Single test issue", TmuxSession: "sbs-123"},
 		}
 
 		// This will fail until we implement showCleanConfirmation
@@ -186,7 +186,7 @@ func TestModalDialogKeyBindingPriority(t *testing.T) {
 		model := setupTestModel()
 		model.showConfirmationDialog = true
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 		model.cursor = 0
 
@@ -214,8 +214,8 @@ func TestModalDialogKeyBindingPriority(t *testing.T) {
 		model := setupTestModel()
 		model.showConfirmationDialog = false
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
-			{IssueNumber: 124, TmuxSession: "work-issue-124"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
+			{IssueNumber: 124, TmuxSession: "sbs-124"},
 		}
 		model.cursor = 0
 
@@ -243,7 +243,7 @@ func TestModalDialogAccessibility(t *testing.T) {
 		model := setupTestModel()
 		model.showConfirmationDialog = true
 		model.pendingCleanSessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 
 		// Test that Enter key confirms cleanup (same as 'y')

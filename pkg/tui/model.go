@@ -470,7 +470,7 @@ func (m Model) View() string {
 	// Sessions list
 	if len(m.sessions) == 0 {
 		b.WriteString(mutedStyle.Render("No active work sessions found.") + "\n")
-		b.WriteString(mutedStyle.Render("Use 'work-orchestrator start <issue-number>' to create a new session.") + "\n")
+		b.WriteString(mutedStyle.Render("Use 'sbs start <issue-number>' to create a new session.") + "\n")
 	} else {
 		// Calculate responsive column widths based on terminal width
 		var widths ColumnWidths
@@ -1054,6 +1054,11 @@ func logScriptExecution(info LogExecutionInfo) {
 // executeLoghookScript executes the .sbs/loghook script with default timeout (10 seconds)
 func executeLoghookScript(session config.SessionMetadata) (string, error) {
 	return executeLoghookScriptWithOptions(session, 10, 1048576) // 10s timeout, 1MB limit
+}
+
+// ExecuteLoghookScript executes the loghook script for a session (exported wrapper)
+func ExecuteLoghookScript(session config.SessionMetadata) (string, error) {
+	return executeLoghookScript(session)
 }
 
 // executeLoghookScriptWithTimeout executes the loghook script with a custom timeout

@@ -156,8 +156,8 @@ sbs start test:experiment    # Experimental work
 
 # Each test session creates:
 # - Git branch: test-{id}
-# - Worktree: ~/.work-issue-worktrees/test-{id}/
-# - Tmux session: work-issue-test-{id}
+# - Worktree: ~/.sbs-worktrees/test-{id}/
+# - Tmux session: sbs-test-{id}
 # - Long-running sandbox with sleep infinity
 ```
 
@@ -167,9 +167,9 @@ SBS integrates with the `sandbox` command to provide isolated development enviro
 
 #### Sandbox Naming Convention
 ```bash
-# Format: work-issue-{repo-name}-{issue-number}[-{title-slug}]
-work-issue-myproject-123                    # Basic format
-work-issue-myproject-123-fix-login-bug      # With SBS_TITLE environment variable
+# Format: sbs-{repo-name}-{issue-number}[-{title-slug}]
+sbs-myproject-123                    # Basic format
+sbs-myproject-123-fix-login-bug      # With SBS_TITLE environment variable
 ```
 
 #### Sandbox Management Commands
@@ -178,27 +178,27 @@ work-issue-myproject-123-fix-login-bug      # With SBS_TITLE environment variabl
 sandbox list
 
 # Check status of specific sandbox
-sandbox --name work-issue-myproject-123 status
+sandbox --name sbs-myproject-123 status
 
 # Access files in sandbox
-sandbox --name work-issue-myproject-123 ls /work
-sandbox --name work-issue-myproject-123 cat /work/README.md
+sandbox --name sbs-myproject-123 ls /work
+sandbox --name sbs-myproject-123 cat /work/README.md
 
 # Execute commands in sandbox
-sandbox --name work-issue-myproject-123 pwd
-sandbox --name work-issue-myproject-123 git status
+sandbox --name sbs-myproject-123 pwd
+sandbox --name sbs-myproject-123 git status
 
 # Show changes made in sandbox
-sandbox --name work-issue-myproject-123 diff
+sandbox --name sbs-myproject-123 diff
 
 # Accept/sync changes from sandbox to host
-sandbox --name work-issue-myproject-123 accept
+sandbox --name sbs-myproject-123 accept
 
 # Stop sandbox (preserves files)
-sandbox --name work-issue-myproject-123 stop
+sandbox --name sbs-myproject-123 stop
 
 # Delete sandbox and all files
-sandbox --name work-issue-myproject-123 delete
+sandbox --name sbs-myproject-123 delete
 ```
 
 #### Sandbox Network and Bind Mounts
@@ -212,7 +212,7 @@ The `work-issue.sh` script configures sandboxes with:
 ```bash
 # SBS_TITLE is automatically passed to sandbox for friendly naming
 export SBS_TITLE="Fix login bug"
-sbs start 123  # Creates: work-issue-myproject-123-fix-login-bug
+sbs start 123  # Creates: sbs-myproject-123-fix-login-bug
 ```
 
 ### Configuration
@@ -220,13 +220,13 @@ sbs start 123  # Creates: work-issue-myproject-123-fix-login-bug
 #### Configuration Files
 - Config stored in `~/.config/sbs/config.json`
 - Sessions tracked in `~/.config/sbs/sessions.json` (global) and repository-specific files
-- Worktrees created in `~/.work-issue-worktrees/` by default
+- Worktrees created in `~/.sbs-worktrees/` by default
 - Sandbox storage in `~/.sandboxes/` (default sandbox location)
 
 #### Example config.json
 ```json
 {
-  "worktree_base_path": "/home/user/.work-issue-worktrees",
+  "worktree_base_path": "/home/user/.sbs-worktrees",
   "github_token": "ghp_your_github_token_here",
   "work_issue_script": "/home/user/code/work-issue/work-issue.sh",
   "repo_path": "."
@@ -234,7 +234,7 @@ sbs start 123  # Creates: work-issue-myproject-123-fix-login-bug
 ```
 
 #### Configuration Options
-- **worktree_base_path**: Directory where git worktrees are created (default: `~/.work-issue-worktrees/`)
+- **worktree_base_path**: Directory where git worktrees are created (default: `~/.sbs-worktrees/`)
 - **github_token**: GitHub personal access token for API access (optional, falls back to `gh` CLI)
 - **work_issue_script**: Path to work-issue.sh script (optional, defaults to current directory)
 - **repo_path**: Repository path to use (default: current directory ".")
@@ -258,7 +258,7 @@ sbs --verbose start 123
 #### Session Lifecycle
 1. Creates git branch `issue-{number}-{title-slug}`
 2. Creates worktree in configured directory
-3. Launches tmux session `work-issue-{number}`
+3. Launches tmux session `sbs-{number}`
 4. Executes `work-issue.sh` script in sandboxed environment
 5. Tracks session metadata for management
 
@@ -282,8 +282,8 @@ sbs start 123 --resume    # Skip work-issue.sh execution
 **Multiple Concurrent Issues:**
 ```bash
 # Work on multiple issues simultaneously
-sbs start 123    # Issue #123 in work-issue-123 tmux session
-sbs start 456    # Issue #456 in work-issue-456 tmux session
+sbs start 123    # Issue #123 in sbs-123 tmux session
+sbs start 456    # Issue #456 in sbs-456 tmux session
 
 # List active sessions
 sbs list         # Or just 'sbs' for TUI
@@ -302,16 +302,16 @@ sbs clean --force      # Clean without confirmation
 
 # Manual cleanup if needed
 sbs stop 123          # Stop specific session
-# Worktree remains in ~/.work-issue-worktrees/issue-123/
+# Worktree remains in ~/.sbs-worktrees/issue-123/
 ```
 
 #### Session Metadata Tracking
 Sessions are tracked with the following information:
 - Issue number and title
 - Git branch name (`issue-{number}-{title-slug}`)
-- Worktree path (`~/.work-issue-worktrees/issue-{number}/`)
-- Tmux session name (`work-issue-{number}`)
-- Sandbox name (`work-issue-{repo}-{number}[-{title}]`)
+- Worktree path (`~/.sbs-worktrees/issue-{number}/`)
+- Tmux session name (`sbs-{number}`)
+- Sandbox name (`sbs-{repo}-{number}[-{title}]`)
 - Creation timestamp and status
 
 ### Claude Code Hook Integration
@@ -333,16 +333,16 @@ The hook installation is completely automatic:
 #### Accessing Hook Data
 ```bash
 # Check what Claude Code was doing in a sandbox
-sandbox --name work-issue-myproject-123 cat .sbs/stop.json
+sandbox --name sbs-myproject-123 cat .sbs/stop.json
 
 # Pretty-print the hook data (if jq available on host)
-sandbox --name work-issue-myproject-123 cat .sbs/stop.json | jq .
+sandbox --name sbs-myproject-123 cat .sbs/stop.json | jq .
 
 # List hook output files
-sandbox --name work-issue-myproject-123 ls -la .sbs/
+sandbox --name sbs-myproject-123 ls -la .sbs/
 
 # Check if hook is working
-sandbox --name work-issue-myproject-123 ls .sbs/
+sandbox --name sbs-myproject-123 ls .sbs/
 ```
 
 #### Hook Output Format

@@ -56,16 +56,16 @@ update_claude_project_trust() {
 
 # Create sandbox name with repository name and optional title
 REPO_NAME=$(get_repo_name)
-SANDBOX_NAME="work-issue-$REPO_NAME-$1"
+SANDBOX_NAME="sbs-$REPO_NAME-$1"
 if [ -n "$SBS_TITLE" ]; then
   # Sanitize title for sandbox name (replace spaces and special chars with dashes)
   SANITIZED_TITLE=$(echo "$SBS_TITLE" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-  SANDBOX_NAME="work-issue-$REPO_NAME-$1-$SANITIZED_TITLE"
+  SANDBOX_NAME="sbs-$REPO_NAME-$1-$SANITIZED_TITLE"
 fi
 
 # Function to install Claude Code hook in sandbox
 install_claude_hook() {
-  local hook_script="/work/scripts/claude-code-stop-hook.sh"
+  local hook_script="/work/.sbs/claude-code-stop-hook.sh"
   local claude_config="$HOME/.claude/config.json"
   local sandbox_hook="$HOME/claude-code-stop-hook.sh"
   

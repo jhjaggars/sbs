@@ -27,12 +27,12 @@ func TestStatusTracking_Integration(t *testing.T) {
 
 	// Test 1: Active session (no stop file, tmux session exists)
 	t.Run("active session workflow", func(t *testing.T) {
-		mockTmux.SetSessionExists("work-issue-123", true)
+		mockTmux.SetSessionExists("sbs-123", true)
 
 		session := config.SessionMetadata{
 			IssueNumber:  123,
 			WorktreePath: worktreePath,
-			TmuxSession:  "work-issue-123",
+			TmuxSession:  "sbs-123",
 		}
 
 		status := detector.DetectSessionStatus(session)
@@ -43,7 +43,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 
 	// Test 2: Stopped session (stop file exists, no tmux session)
 	t.Run("stopped session workflow", func(t *testing.T) {
-		mockTmux.SetSessionExists("work-issue-123", false)
+		mockTmux.SetSessionExists("sbs-123", false)
 
 		// Create a stop.json file from Claude Code hooks
 		stopFile := filepath.Join(sbsDir, "stop.json")
@@ -66,7 +66,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 		session := config.SessionMetadata{
 			IssueNumber:  123,
 			WorktreePath: worktreePath,
-			TmuxSession:  "work-issue-123",
+			TmuxSession:  "sbs-123",
 		}
 
 		status := detector.DetectSessionStatus(session)
@@ -82,13 +82,13 @@ func TestStatusTracking_Integration(t *testing.T) {
 		stopFile := filepath.Join(sbsDir, "stop.json")
 		os.Remove(stopFile)
 
-		mockTmux.SetSessionExists("work-issue-123", false)
+		mockTmux.SetSessionExists("sbs-123", false)
 
 		lastActivity := time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 		session := config.SessionMetadata{
 			IssueNumber:  123,
 			WorktreePath: worktreePath,
-			TmuxSession:  "work-issue-123",
+			TmuxSession:  "sbs-123",
 			LastActivity: lastActivity,
 		}
 
@@ -100,7 +100,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 
 	// Test 4: Unknown status (corrupted stop file)
 	t.Run("unknown status workflow", func(t *testing.T) {
-		mockTmux.SetSessionExists("work-issue-123", false)
+		mockTmux.SetSessionExists("sbs-123", false)
 
 		// Create a corrupted stop.json file
 		stopFile := filepath.Join(sbsDir, "stop.json")
@@ -109,7 +109,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 		session := config.SessionMetadata{
 			IssueNumber:  123,
 			WorktreePath: worktreePath,
-			TmuxSession:  "work-issue-123",
+			TmuxSession:  "sbs-123",
 		}
 
 		status := detector.DetectSessionStatus(session)
@@ -120,10 +120,10 @@ func TestStatusTracking_Integration(t *testing.T) {
 
 	// Test 5: Sandbox-based stop file detection
 	t.Run("sandbox stop file workflow", func(t *testing.T) {
-		mockTmux.SetSessionExists("work-issue-123", false)
+		mockTmux.SetSessionExists("sbs-123", false)
 
 		// Set up sandbox with stop.json file
-		sandboxName := "work-issue-myrepo-123"
+		sandboxName := "sbs-myrepo-123"
 		mockSandbox.SetSandboxExists(sandboxName, true)
 
 		stopTime := time.Now().Add(-10 * time.Minute)
@@ -140,7 +140,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 		session := config.SessionMetadata{
 			IssueNumber:    123,
 			WorktreePath:   worktreePath,
-			TmuxSession:    "work-issue-123",
+			TmuxSession:    "sbs-123",
 			SandboxName:    sandboxName,
 			RepositoryName: "myrepo",
 		}
@@ -153,10 +153,10 @@ func TestStatusTracking_Integration(t *testing.T) {
 
 	// Test 6: Sandbox doesn't exist - fallback to direct file access
 	t.Run("sandbox not found fallback workflow", func(t *testing.T) {
-		mockTmux.SetSessionExists("work-issue-123", false)
+		mockTmux.SetSessionExists("sbs-123", false)
 
 		// Sandbox doesn't exist
-		sandboxName := "work-issue-myrepo-456"
+		sandboxName := "sbs-myrepo-456"
 		mockSandbox.SetSandboxExists(sandboxName, false)
 
 		// But direct file exists
@@ -175,7 +175,7 @@ func TestStatusTracking_Integration(t *testing.T) {
 		session := config.SessionMetadata{
 			IssueNumber:    456,
 			WorktreePath:   worktreePath,
-			TmuxSession:    "work-issue-456",
+			TmuxSession:    "sbs-456",
 			SandboxName:    sandboxName,
 			RepositoryName: "myrepo",
 		}

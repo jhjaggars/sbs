@@ -71,7 +71,7 @@ type SessionMetadata struct {
 func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	return &Config{
-		WorktreeBasePath:          filepath.Join(homeDir, ".work-issue-worktrees"),
+		WorktreeBasePath:          filepath.Join(homeDir, ".sbs-worktrees"),
 		GitHubToken:               os.Getenv("GITHUB_TOKEN"),
 		WorkIssueScript:           filepath.Join(homeDir, "code/work-issue/work-issue.sh"),
 		RepoPath:                  ".",     // Current directory by default
