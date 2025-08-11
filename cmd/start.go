@@ -33,8 +33,8 @@ When run without arguments, launches interactive work item selection:
 
 This command will:
 1. Create/switch to a work item branch (issue-{source}-{id}-{slug})
-2. Create/use a worktree in ~/.work-issue-worktrees/
-3. Create/attach to a tmux session (work-issue-{source}-{id})
+2. Create/use a worktree in ~/.sbs-worktrees/
+3. Create/attach to a tmux session (sbs-{source}-{id})
 4. Launch work-issue.sh in the session
 
 Input sources are configured via .sbs/input-source.json in your project root.
@@ -431,14 +431,14 @@ func generateWorkItemWorktreePath(currentRepo *repo.Repository, workItem *inputs
 // generateWorkItemTmuxSessionName creates a tmux session name for the work item
 func generateWorkItemTmuxSessionName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
 	// Create a consistent naming format for all work item sources
-	return fmt.Sprintf("work-issue-%s-%s-%s",
+	return fmt.Sprintf("sbs-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
 
 // generateWorkItemSandboxName creates a sandbox name for the work item
 func generateWorkItemSandboxName(currentRepo *repo.Repository, workItem *inputsource.WorkItem) string {
 	// Create a consistent naming format for all work item sources
-	return fmt.Sprintf("work-issue-%s-%s-%s",
+	return fmt.Sprintf("sbs-%s-%s-%s",
 		currentRepo.Name, workItem.Source, workItem.ID)
 }
 

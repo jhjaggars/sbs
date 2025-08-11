@@ -22,7 +22,7 @@ func TestConfig_CommandLoggingConfiguration(t *testing.T) {
 
 	t.Run("load_logging_config_from_json", func(t *testing.T) {
 		jsonData := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"command_logging": true,
 			"command_log_level": "info",
@@ -89,7 +89,7 @@ func TestConfig_CommandLoggingConfiguration(t *testing.T) {
 	t.Run("backward_compatibility_config", func(t *testing.T) {
 		// Old config without logging fields should still work
 		jsonData := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"repo_path": "."
 		}`
@@ -104,7 +104,7 @@ func TestConfig_CommandLoggingConfiguration(t *testing.T) {
 		assert.Equal(t, "", config.CommandLogPath)
 
 		// Other fields should be loaded correctly
-		assert.Equal(t, "~/.work-issue-worktrees", config.WorktreeBasePath)
+		assert.Equal(t, "~/.sbs-worktrees", config.WorktreeBasePath)
 		assert.Equal(t, "./work-issue.sh", config.WorkIssueScript)
 		assert.Equal(t, ".", config.RepoPath)
 	})
@@ -113,7 +113,7 @@ func TestConfig_CommandLoggingConfiguration(t *testing.T) {
 func TestConfig_LoggingConfigurationSerialization(t *testing.T) {
 	t.Run("serialize_logging_config", func(t *testing.T) {
 		config := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			WorkIssueScript:  "./work-issue.sh",
 			CommandLogging:   true,
 			CommandLogLevel:  "debug",
@@ -131,7 +131,7 @@ func TestConfig_LoggingConfigurationSerialization(t *testing.T) {
 
 	t.Run("deserialize_logging_config", func(t *testing.T) {
 		jsonData := `{
-			"worktree_base_path": "~/.work-issue-worktrees",
+			"worktree_base_path": "~/.sbs-worktrees",
 			"work_issue_script": "./work-issue.sh",
 			"command_logging": true,
 			"command_log_level": "debug",
@@ -150,7 +150,7 @@ func TestConfig_LoggingConfigurationSerialization(t *testing.T) {
 	t.Run("omitempty_serialization", func(t *testing.T) {
 		// Test that omitempty works correctly for logging fields
 		config := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			WorkIssueScript:  "./work-issue.sh",
 			// Logging fields intentionally omitted/default
 		}
@@ -169,7 +169,7 @@ func TestConfig_LoggingConfigurationSerialization(t *testing.T) {
 func TestConfig_MergeConfigLogging(t *testing.T) {
 	t.Run("merge_logging_config", func(t *testing.T) {
 		baseConfig := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			CommandLogging:   false,
 			CommandLogLevel:  "",
 			CommandLogPath:   "",
@@ -186,12 +186,12 @@ func TestConfig_MergeConfigLogging(t *testing.T) {
 		assert.True(t, merged.CommandLogging)
 		assert.Equal(t, "debug", merged.CommandLogLevel)
 		assert.Equal(t, "/custom/log/path.log", merged.CommandLogPath)
-		assert.Equal(t, "~/.work-issue-worktrees", merged.WorktreeBasePath) // Base value preserved
+		assert.Equal(t, "~/.sbs-worktrees", merged.WorktreeBasePath) // Base value preserved
 	})
 
 	t.Run("merge_partial_logging_config", func(t *testing.T) {
 		baseConfig := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			CommandLogging:   true,
 			CommandLogLevel:  "info",
 			CommandLogPath:   "/base/log.log",
@@ -211,7 +211,7 @@ func TestConfig_MergeConfigLogging(t *testing.T) {
 
 	t.Run("merge_empty_override", func(t *testing.T) {
 		baseConfig := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			CommandLogging:   true,
 			CommandLogLevel:  "debug",
 			CommandLogPath:   "/base/log.log",
@@ -225,7 +225,7 @@ func TestConfig_MergeConfigLogging(t *testing.T) {
 		assert.True(t, merged.CommandLogging)
 		assert.Equal(t, "debug", merged.CommandLogLevel)
 		assert.Equal(t, "/base/log.log", merged.CommandLogPath)
-		assert.Equal(t, "~/.work-issue-worktrees", merged.WorktreeBasePath)
+		assert.Equal(t, "~/.sbs-worktrees", merged.WorktreeBasePath)
 	})
 }
 
@@ -236,7 +236,7 @@ func TestConfig_LoggingConfigurationIntegration(t *testing.T) {
 
 		// Override home directory for this test
 		originalConfig := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			WorkIssueScript:  "./work-issue.sh",
 			CommandLogging:   true,
 			CommandLogLevel:  "info",
@@ -268,7 +268,7 @@ func TestConfig_LoggingConfigurationIntegration(t *testing.T) {
 	t.Run("repository_config_override", func(t *testing.T) {
 		// Test that repository-specific config can override global logging settings
 		globalConfig := &Config{
-			WorktreeBasePath: "~/.work-issue-worktrees",
+			WorktreeBasePath: "~/.sbs-worktrees",
 			CommandLogging:   false,
 			CommandLogLevel:  "",
 		}

@@ -78,13 +78,13 @@ func setupTestModel() Model {
 		{
 			IssueNumber:    123,
 			IssueTitle:     "Test issue 123",
-			TmuxSession:    "work-issue-123",
+			TmuxSession:    "sbs-123",
 			RepositoryName: "test-repo",
 		},
 		{
 			IssueNumber:    124,
 			IssueTitle:     "Test issue 124",
-			TmuxSession:    "work-issue-124",
+			TmuxSession:    "sbs-124",
 			RepositoryName: "test-repo",
 		},
 	}
@@ -241,7 +241,7 @@ func TestStopSelectedSession(t *testing.T) {
 	t.Run("successful_stop_basic_functionality", func(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 		model.cursor = 0
 
@@ -277,7 +277,7 @@ func TestStopSelectedSession(t *testing.T) {
 	t.Run("invalid_session_index", func(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 		model.cursor = 999 // Invalid index
 
@@ -295,8 +295,8 @@ func TestCleanStaleSessions(t *testing.T) {
 	t.Run("identify_stale_sessions_basic_functionality", func(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
-			{IssueNumber: 124, TmuxSession: "work-issue-124"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
+			{IssueNumber: 124, TmuxSession: "sbs-124"},
 		}
 
 		staleSessions := model.identifyStaleSessionsInCurrentView()
@@ -308,7 +308,7 @@ func TestCleanStaleSessions(t *testing.T) {
 	t.Run("clean_execution_returns_proper_structure", func(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 
 		result := model.identifyAndCleanStaleSessions()
@@ -361,7 +361,7 @@ func TestStopCleanKeyHandling(t *testing.T) {
 		model := setupTestModel()
 		model.showConfirmationDialog = true
 		model.pendingCleanSessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "work-issue-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123"},
 		}
 
 		// This will fail until we implement 'y' key handling in dialog mode

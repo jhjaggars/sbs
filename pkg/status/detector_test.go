@@ -31,7 +31,7 @@ func TestStatusDetector_DetectSessionStatus(t *testing.T) {
 				return worktreeDir
 			},
 			hasStopFile:    false,
-			tmuxSession:    "work-issue-123",
+			tmuxSession:    "sbs-123",
 			expectedStatus: "active",
 		},
 		{
@@ -233,12 +233,12 @@ func TestStatusDetector_HandleMissingStopFile(t *testing.T) {
 	require.NoError(t, os.MkdirAll(worktreePath, 0755))
 
 	mockTmux := &MockTmuxManager{}
-	mockTmux.SetSessionExists("work-issue-123", true)
+	mockTmux.SetSessionExists("sbs-123", true)
 	detector := NewDetector(mockTmux, &MockSandboxManager{})
 	session := config.SessionMetadata{
 		IssueNumber:  123,
 		WorktreePath: worktreePath,
-		TmuxSession:  "work-issue-123",
+		TmuxSession:  "sbs-123",
 	}
 
 	status := detector.DetectSessionStatus(session)

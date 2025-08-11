@@ -90,7 +90,7 @@ func resolveSandboxName(session config.SessionMetadata, sandboxManager *sandbox.
 		if session.SandboxName != "" {
 			return session.SandboxName
 		}
-		return fmt.Sprintf("work-issue-%s", session.NamespacedID)
+		return fmt.Sprintf("sbs-%s", session.NamespacedID)
 	}
 
 	// Use stored sandbox name if available
@@ -366,7 +366,7 @@ func executeComprehensiveCleanup(dryRun, force bool) error {
 // removeWorktreeDirectory safely removes a worktree directory
 func removeWorktreeDirectory(worktreePath string) error {
 	// Validate that this looks like a worktree path to avoid accidental deletion
-	if !strings.Contains(worktreePath, "work-issue") && !strings.Contains(worktreePath, "worktree") {
+	if !strings.Contains(worktreePath, "sbs") && !strings.Contains(worktreePath, "worktree") {
 		return fmt.Errorf("path doesn't appear to be a worktree: %s", worktreePath)
 	}
 

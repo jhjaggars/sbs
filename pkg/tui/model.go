@@ -470,7 +470,7 @@ func (m Model) View() string {
 	// Sessions list
 	if len(m.sessions) == 0 {
 		b.WriteString(mutedStyle.Render("No active work sessions found.") + "\n")
-		b.WriteString(mutedStyle.Render("Use 'work-orchestrator start <issue-number>' to create a new session.") + "\n")
+		b.WriteString(mutedStyle.Render("Use 'sbs start <issue-number>' to create a new session.") + "\n")
 	} else {
 		// Calculate responsive column widths based on terminal width
 		var widths ColumnWidths

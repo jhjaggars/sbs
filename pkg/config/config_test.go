@@ -15,9 +15,9 @@ func TestSessionMetadata_FriendlyTitleField(t *testing.T) {
 		IssueTitle:     "Fix user authentication bug",
 		FriendlyTitle:  "fix-user-authentication-bug",
 		Branch:         "issue-123-fix-user-authentication-bug",
-		WorktreePath:   "/home/user/.work-issue-worktrees/project/issue-123",
-		TmuxSession:    "work-issue-project-123",
-		SandboxName:    "work-issue-project-123",
+		WorktreePath:   "/home/user/.sbs-worktrees/project/issue-123",
+		TmuxSession:    "sbs-project-123",
+		SandboxName:    "sbs-project-123",
 		RepositoryName: "project",
 		RepositoryRoot: "/home/user/project",
 		CreatedAt:      "2025-07-31T08:00:00Z",
@@ -37,9 +37,9 @@ func TestSessionMetadata_JSONSerialization(t *testing.T) {
 		IssueTitle:     "Fix user authentication bug",
 		FriendlyTitle:  "fix-user-authentication-bug",
 		Branch:         "issue-123-fix-user-authentication-bug",
-		WorktreePath:   "/home/user/.work-issue-worktrees/project/issue-123",
-		TmuxSession:    "work-issue-project-123",
-		SandboxName:    "work-issue-project-123",
+		WorktreePath:   "/home/user/.sbs-worktrees/project/issue-123",
+		TmuxSession:    "sbs-project-123",
+		SandboxName:    "sbs-project-123",
 		RepositoryName: "project",
 		RepositoryRoot: "/home/user/project",
 		CreatedAt:      "2025-07-31T08:00:00Z",
@@ -63,9 +63,9 @@ func TestSessionMetadata_JSONDeserialization(t *testing.T) {
 		"issue_title": "Fix user authentication bug",
 		"friendly_title": "fix-user-authentication-bug",
 		"branch": "issue-123-fix-user-authentication-bug",
-		"worktree_path": "/home/user/.work-issue-worktrees/project/issue-123",
-		"tmux_session": "work-issue-project-123",
-		"sandbox_name": "work-issue-project-123",
+		"worktree_path": "/home/user/.sbs-worktrees/project/issue-123",
+		"tmux_session": "sbs-project-123",
+		"sandbox_name": "sbs-project-123",
 		"repository_name": "project",
 		"repository_root": "/home/user/project",
 		"created_at": "2025-07-31T08:00:00Z",
@@ -81,7 +81,7 @@ func TestSessionMetadata_JSONDeserialization(t *testing.T) {
 	assert.Equal(t, "Fix user authentication bug", metadata.IssueTitle)
 	assert.Equal(t, "fix-user-authentication-bug", metadata.FriendlyTitle)
 	assert.Equal(t, "issue-123-fix-user-authentication-bug", metadata.Branch)
-	assert.Equal(t, "work-issue-project-123", metadata.TmuxSession)
+	assert.Equal(t, "sbs-project-123", metadata.TmuxSession)
 	assert.Equal(t, "active", metadata.Status)
 }
 
@@ -91,9 +91,9 @@ func TestSessionMetadata_BackwardCompatibility(t *testing.T) {
 		"issue_number": 123,
 		"issue_title": "Fix user authentication bug",
 		"branch": "issue-123-fix-user-authentication-bug",
-		"worktree_path": "/home/user/.work-issue-worktrees/project/issue-123",
-		"tmux_session": "work-issue-project-123",
-		"sandbox_name": "work-issue-project-123",
+		"worktree_path": "/home/user/.sbs-worktrees/project/issue-123",
+		"tmux_session": "sbs-project-123",
+		"sandbox_name": "sbs-project-123",
 		"repository_name": "project",
 		"repository_root": "/home/user/project",
 		"created_at": "2025-07-31T08:00:00Z",
@@ -109,7 +109,7 @@ func TestSessionMetadata_BackwardCompatibility(t *testing.T) {
 	assert.Equal(t, "Fix user authentication bug", metadata.IssueTitle)
 	assert.Equal(t, "", metadata.FriendlyTitle) // Should be empty string (Go zero value)
 	assert.Equal(t, "issue-123-fix-user-authentication-bug", metadata.Branch)
-	assert.Equal(t, "work-issue-project-123", metadata.TmuxSession)
+	assert.Equal(t, "sbs-project-123", metadata.TmuxSession)
 	assert.Equal(t, "active", metadata.Status)
 }
 
@@ -120,9 +120,9 @@ func TestSessionMetadata_DefaultFriendlyTitle(t *testing.T) {
 		IssueTitle:  "Fix user authentication bug",
 		// FriendlyTitle intentionally omitted
 		Branch:         "issue-123-fix-user-authentication-bug",
-		WorktreePath:   "/home/user/.work-issue-worktrees/project/issue-123",
-		TmuxSession:    "work-issue-project-123",
-		SandboxName:    "work-issue-project-123",
+		WorktreePath:   "/home/user/.sbs-worktrees/project/issue-123",
+		TmuxSession:    "sbs-project-123",
+		SandboxName:    "sbs-project-123",
 		RepositoryName: "project",
 		RepositoryRoot: "/home/user/project",
 		CreatedAt:      "2025-07-31T08:00:00Z",
@@ -143,9 +143,9 @@ func TestSessionMetadata_CompleteWorkflow(t *testing.T) {
 		IssueTitle:     "Implement user profile page",
 		FriendlyTitle:  "implement-user-profile-page",
 		Branch:         "issue-456-implement-user-profile-page",
-		WorktreePath:   "/home/user/.work-issue-worktrees/webapp/issue-456",
-		TmuxSession:    "work-issue-webapp-456",
-		SandboxName:    "work-issue-webapp-456",
+		WorktreePath:   "/home/user/.sbs-worktrees/webapp/issue-456",
+		TmuxSession:    "sbs-webapp-456",
+		SandboxName:    "sbs-webapp-456",
 		RepositoryName: "webapp",
 		RepositoryRoot: "/home/user/webapp",
 		CreatedAt:      "2025-07-31T09:00:00Z",
@@ -184,9 +184,9 @@ func TestSessionMetadata_EmptyFriendlyTitle(t *testing.T) {
 		IssueTitle:     "Fix critical security vulnerability",
 		FriendlyTitle:  "", // Explicitly empty
 		Branch:         "issue-789-fix-critical-security-vulnerability",
-		WorktreePath:   "/home/user/.work-issue-worktrees/secure-app/issue-789",
-		TmuxSession:    "work-issue-secure-app-789",
-		SandboxName:    "work-issue-secure-app-789",
+		WorktreePath:   "/home/user/.sbs-worktrees/secure-app/issue-789",
+		TmuxSession:    "sbs-secure-app-789",
+		SandboxName:    "sbs-secure-app-789",
 		RepositoryName: "secure-app",
 		RepositoryRoot: "/home/user/secure-app",
 		CreatedAt:      "2025-07-31T11:00:00Z",

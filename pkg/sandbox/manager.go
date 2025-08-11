@@ -17,12 +17,12 @@ func NewManager() *Manager {
 
 // GetSandboxName returns the expected sandbox name for an issue (legacy method)
 func (m *Manager) GetSandboxName(issueNumber int) string {
-	return fmt.Sprintf("work-issue-%d", issueNumber)
+	return fmt.Sprintf("sbs-%d", issueNumber)
 }
 
 // GetRepositorySandboxName returns the repository-scoped sandbox name
 func (m *Manager) GetRepositorySandboxName(repoName string, issueNumber int) string {
-	return fmt.Sprintf("work-issue-%s-%d", repoName, issueNumber)
+	return fmt.Sprintf("sbs-%s-%d", repoName, issueNumber)
 }
 
 // SandboxExists checks if a sandbox with the given name exists
@@ -67,7 +67,7 @@ func (m *Manager) DeleteSandbox(sandboxName string) error {
 	return nil
 }
 
-// ListSandboxes returns all work-issue sandboxes
+// ListSandboxes returns all sbs sandboxes
 func (m *Manager) ListSandboxes() ([]string, error) {
 	output, err := m.runSandboxCommand([]string{"list"})
 	if err != nil {
@@ -78,20 +78,20 @@ func (m *Manager) ListSandboxes() ([]string, error) {
 		return nil, fmt.Errorf("failed to list sandboxes: %w", err)
 	}
 
-	var workIssueSandboxes []string
+	var sbsSandboxes []string
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "work-issue-") {
+		if strings.HasPrefix(line, "sbs-") {
 			// Extract just the sandbox name (first field)
 			fields := strings.Fields(line)
 			if len(fields) > 0 {
-				workIssueSandboxes = append(workIssueSandboxes, fields[0])
+				sbsSandboxes = append(sbsSandboxes, fields[0])
 			}
 		}
 	}
 
-	return workIssueSandboxes, nil
+	return sbsSandboxes, nil
 }
 
 // CheckSandboxInstalled verifies that the sandbox command is available

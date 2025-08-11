@@ -25,8 +25,8 @@ go build -o sbs
 
 This will:
 1. Create/switch to branch `issue-123-<issue-title-slug>`
-2. Create worktree in `~/.work-issue-worktrees/issue-123/`
-3. Launch tmux session `work-issue-123`
+2. Create worktree in `~/.sbs-worktrees/issue-123/`
+3. Launch tmux session `sbs-123`
 4. Execute `work-issue.sh 123` in the session
 
 ### List active sessions
@@ -57,7 +57,7 @@ Configuration is stored in `~/.config/sbs/config.json`:
 
 ```json
 {
-  "worktree_base_path": "/home/user/.work-issue-worktrees",
+  "worktree_base_path": "/home/user/.sbs-worktrees",
   "github_token": "ghp_...",
   "work_issue_script": "/home/user/code/work-issue/work-issue.sh",
   "repo_path": "."
@@ -69,7 +69,7 @@ Configuration is stored in `~/.config/sbs/config.json`:
 - Git with worktree support
 - tmux
 - GitHub CLI (`gh`) for issue metadata
-- `work-issue.sh` script (from the original work-issue project)
+- `work-issue.sh` script integration
 
 ## Architecture
 
@@ -110,13 +110,13 @@ To check what Claude Code was doing in any sandbox:
 
 ```bash
 # Check the most recent Claude Code activity
-sandbox --name work-issue-repo-123 cat .sbs/stop.json
+sandbox --name sbs-repo-123 cat .sbs/stop.json
 
 # Pretty-print the JSON (if jq is available on host)
-sandbox --name work-issue-repo-123 cat .sbs/stop.json | jq .
+sandbox --name sbs-repo-123 cat .sbs/stop.json | jq .
 
 # Check if hook data exists
-sandbox --name work-issue-repo-123 ls -la .sbs/
+sandbox --name sbs-repo-123 ls -la .sbs/
 ```
 
 ### Output Format
@@ -167,8 +167,8 @@ sbs start 123
 # ... Claude Code tool executions happen ...
 
 # From host, check what Claude Code was doing
-sandbox --name work-issue-repo-123 cat .sbs/stop.json
+sandbox --name sbs-repo-123 cat .sbs/stop.json
 
 # Pretty print the last activity
-sandbox --name work-issue-repo-123 cat .sbs/stop.json | jq .hook_data
+sandbox --name sbs-repo-123 cat .sbs/stop.json | jq .hook_data
 ```
