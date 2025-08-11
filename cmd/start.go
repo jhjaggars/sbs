@@ -284,9 +284,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			// Default behavior - execute work-issue.sh
-			fmt.Printf("Starting work-issue.sh in session...\n")
+			workIssueScript := resolveWorkIssueScript(currentRepo.Root, repoConfig.WorkIssueScript)
+			fmt.Printf("Starting work-issue.sh in session (using: %s)...\n", workIssueScript)
 			// Use 0 as dummy issue number since work-issue.sh will use environment variables for context
-			if err := tmuxManager.StartWorkIssue(session.Name, 0, repoConfig.WorkIssueScript, tmuxEnv); err != nil {
+
+			if err := tmuxManager.StartWorkIssue(session.Name, 0, workIssueScript, tmuxEnv); err != nil {
 				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
 			}
 		}
@@ -469,4 +471,17 @@ func createWorkItemSessionMetadata(workItem *inputsource.WorkItem, branch, workt
 		SourceType:     workItem.Source,
 		NamespacedID:   workItem.FullID(),
 	}
+}
+
+// resolveWorkIssueScript determines which work-issue.sh script to use
+// Priority: .sbs/work-issue.sh -> configured script -> default
+func resolveWorkIssueScript(repoRoot, configuredScript string) string {
+	// First check for .sbs/work-issue.sh in repository root
+	localScript := filepath.Join(repoRoot, ".sbs", "work-issue.sh")
+	if fileExists(localScript) {
+		return localScript
+	}
+
+	// Fall back to configured script
+	return configuredScript
 }
