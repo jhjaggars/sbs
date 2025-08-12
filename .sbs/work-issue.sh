@@ -65,7 +65,7 @@ fi
 
 # Function to install Claude Code hook in sandbox
 install_claude_hook() {
-  local hook_script="/work/.sbs/claude-code-stop-hook.sh"
+  local hook_script="$(dirname "$0")/claude-code-stop-hook.sh"
   local claude_config="$HOME/.claude/config.json"
   local sandbox_hook="$HOME/claude-code-stop-hook.sh"
   
@@ -124,13 +124,6 @@ install_claude_hook() {
     return 1
   fi
   
-  # Create .sbs directory in working directory for hook output
-  if mkdir -p /work/.sbs; then
-    echo "Created .sbs directory for hook output: /work/.sbs"
-  else
-    echo "Warning: Failed to create .sbs directory"
-    return 1
-  fi
   
   echo "Claude Code hook installation completed successfully"
   return 0
