@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"sbs/pkg/cleanup"
 	"sbs/pkg/config"
 	"sbs/pkg/sandbox"
 	"sbs/pkg/tmux"
@@ -299,22 +300,31 @@ func TestCleanStaleSessions(t *testing.T) {
 			{IssueNumber: 124, TmuxSession: "sbs-124"},
 		}
 
-		staleSessions := model.identifyStaleSessionsInCurrentView()
+		// Use CleanupManager to identify stale sessions
+		staleSessions, err := model.cleanupManager.IdentifyStaleSessionsInView(model.sessions, cleanup.ViewModeGlobal)
 
 		// Since no tmux sessions exist in test environment, all should be stale
+		assert.NoError(t, err)
 		assert.Equal(t, 2, len(staleSessions), "Should identify both sessions as stale")
 	})
 
 	t.Run("clean_execution_returns_proper_structure", func(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{
-			{IssueNumber: 123, TmuxSession: "sbs-123"},
+			{IssueNumber: 123, TmuxSession: "sbs-123", NamespacedID: "123"},
 		}
 
-		result := model.identifyAndCleanStaleSessions()
+		// Test the TUI cleanup flow using CleanupManager
+		staleSessions, err := model.cleanupManager.IdentifyStaleSessionsInView(model.sessions, cleanup.ViewModeGlobal)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(staleSessions), "Should identify session as stale")
+
+		// Test cleanup using CleanupManager
+		options := model.cleanupManager.BuildTUICleanupOptions(cleanup.ViewModeGlobal, true)
+		results, err := model.cleanupManager.CleanupSessions(staleSessions, options)
 
 		// Test the structure is correct
-		assert.NotNil(t, result.cleanedSessions, "Should have cleanedSessions field")
+		assert.NotNil(t, results, "Should have CleanupResults")
 		// Error may or may not be present depending on sandbox operations
 	})
 
@@ -322,7 +332,8 @@ func TestCleanStaleSessions(t *testing.T) {
 		model := setupTestModel()
 		model.sessions = []config.SessionMetadata{}
 
-		staleSessions := model.identifyStaleSessionsInCurrentView()
+		staleSessions, err := model.cleanupManager.IdentifyStaleSessionsInView(model.sessions, cleanup.ViewModeGlobal)
+		assert.NoError(t, err)
 		assert.Equal(t, 0, len(staleSessions), "Should find no stale sessions in empty list")
 	})
 }
