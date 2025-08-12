@@ -804,13 +804,46 @@ func (m Model) executeCleanup() tea.Cmd {
 			cleanedSessions = append(cleanedSessions, session)
 		}
 
-		var err error
+		// Load all sessions and filter out cleaned ones
+		allSessions, loadErr := config.LoadAllRepositorySessions()
+		if loadErr != nil {
+			return cleanSessionsMsg{
+				err:             fmt.Errorf("failed to load sessions: %w", loadErr),
+				cleanedSessions: cleanedSessions,
+			}
+		}
+
+		// Remove cleaned sessions from the list
+		var remainingSessions []config.SessionMetadata
+		for _, session := range allSessions {
+			shouldKeep := true
+			for _, cleanedSession := range cleanedSessions {
+				if session.NamespacedID == cleanedSession.NamespacedID &&
+					session.RepositoryRoot == cleanedSession.RepositoryRoot {
+					shouldKeep = false
+					break
+				}
+			}
+			if shouldKeep {
+				remainingSessions = append(remainingSessions, session)
+			}
+		}
+
+		// Save the updated sessions list
+		if saveErr := config.SaveSessions(remainingSessions); saveErr != nil {
+			return cleanSessionsMsg{
+				err:             fmt.Errorf("failed to save updated sessions: %w", saveErr),
+				cleanedSessions: cleanedSessions,
+			}
+		}
+
+		var finalErr error
 		if hasErrors {
-			err = fmt.Errorf("failed to clean some sessions")
+			finalErr = fmt.Errorf("failed to clean some sessions")
 		}
 
 		return cleanSessionsMsg{
-			err:             err,
+			err:             finalErr,
 			cleanedSessions: cleanedSessions,
 		}
 	}
@@ -862,9 +895,48 @@ func (m Model) identifyAndCleanStaleSessions() struct {
 		cleanedSessions = append(cleanedSessions, session)
 	}
 
-	var err error
+	// Load all sessions and filter out cleaned ones
+	allSessions, loadErr := config.LoadAllRepositorySessions()
+	if loadErr != nil {
+		return struct {
+			cleanedSessions []config.SessionMetadata
+			err             error
+		}{
+			cleanedSessions: cleanedSessions,
+			err:             fmt.Errorf("failed to load sessions: %w", loadErr),
+		}
+	}
+
+	// Remove cleaned sessions from the list
+	var remainingSessions []config.SessionMetadata
+	for _, session := range allSessions {
+		shouldKeep := true
+		for _, cleanedSession := range cleanedSessions {
+			if session.NamespacedID == cleanedSession.NamespacedID &&
+				session.RepositoryRoot == cleanedSession.RepositoryRoot {
+				shouldKeep = false
+				break
+			}
+		}
+		if shouldKeep {
+			remainingSessions = append(remainingSessions, session)
+		}
+	}
+
+	// Save the updated sessions list
+	if saveErr := config.SaveSessions(remainingSessions); saveErr != nil {
+		return struct {
+			cleanedSessions []config.SessionMetadata
+			err             error
+		}{
+			cleanedSessions: cleanedSessions,
+			err:             fmt.Errorf("failed to save updated sessions: %w", saveErr),
+		}
+	}
+
+	var finalErr error
 	if hasErrors {
-		err = fmt.Errorf("failed to clean some sessions")
+		finalErr = fmt.Errorf("failed to clean some sessions")
 	}
 
 	return struct {
@@ -872,7 +944,7 @@ func (m Model) identifyAndCleanStaleSessions() struct {
 		err             error
 	}{
 		cleanedSessions: cleanedSessions,
-		err:             err,
+		err:             finalErr,
 	}
 }
 
