@@ -118,9 +118,9 @@ func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 			return nil
 		}
 
-		// Invalid worktree detected, remove it first
-		if err := m.cleanupInvalidWorktree(worktreePath); err != nil {
-			return fmt.Errorf("failed to cleanup invalid worktree at %s: %w", worktreePath, err)
+		// Invalid worktree detected, use enhanced cleanup
+		if err := m.CleanupWorktreeConflict(worktreePath); err != nil {
+			return fmt.Errorf("failed to cleanup worktree conflict at %s: %w", worktreePath, err)
 		}
 	}
 
@@ -129,15 +129,25 @@ func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 		return fmt.Errorf("branch %s does not exist", branchName)
 	}
 
-	// Use git command to create worktree (go-git doesn't support worktrees well)
-	cmd := exec.Command("git", "worktree", "add", worktreePath, branchName)
-	cmd.Dir = m.repoPath
-
-	// Capture both stdout and stderr for better error reporting
-	output, err := cmd.CombinedOutput()
+	// Use git command to create worktree with enhanced error handling
+	args := []string{"worktree", "add", worktreePath, branchName}
+	output, err := m.runGitCommand(args)
 	if err != nil {
-		return fmt.Errorf("failed to create worktree at %s for branch %s: %w\nGit output: %s",
-			worktreePath, branchName, err, string(output))
+		// If it fails due to worktree conflict, try cleanup and retry once
+		if strings.Contains(string(output), "already registered worktree") {
+			if cleanupErr := m.CleanupWorktreeConflict(worktreePath); cleanupErr != nil {
+				return fmt.Errorf("failed to create worktree at %s for branch %s: %w\nCleanup also failed: %w\nGit output: %s",
+					worktreePath, branchName, err, cleanupErr, string(output))
+			}
+			// Retry after cleanup
+			_, retryErr := m.runGitCommand(args)
+			if retryErr != nil {
+				return fmt.Errorf("failed to create worktree at %s for branch %s after cleanup: %w", worktreePath, branchName, retryErr)
+			}
+		} else {
+			return fmt.Errorf("failed to create worktree at %s for branch %s: %w\nGit output: %s",
+				worktreePath, branchName, err, string(output))
+		}
 	}
 
 	// Final validation that worktree was created successfully
@@ -149,12 +159,16 @@ func (m *Manager) CreateWorktree(branchName string, worktreePath string) error {
 }
 
 func (m *Manager) RemoveWorktree(worktreePath string) error {
-	// Remove worktree using git command
-	cmd := exec.Command("git", "worktree", "remove", worktreePath, "--force")
-	cmd.Dir = m.repoPath
-	if err := cmd.Run(); err != nil {
-		// If git command fails, try manual removal
-		return os.RemoveAll(worktreePath)
+	// Remove worktree using git command with logging
+	args := []string{"worktree", "remove", worktreePath, "--force"}
+	_, err := m.runGitCommand(args)
+	if err != nil {
+		// If git command fails, try manual removal and then prune
+		if rmErr := os.RemoveAll(worktreePath); rmErr != nil {
+			return fmt.Errorf("failed to remove worktree via git (%w) and manual removal (%w)", err, rmErr)
+		}
+		// Try to prune stale references after manual removal
+		_ = m.PruneStaleWorktrees() // Ignore prune errors as this is cleanup
 	}
 	return nil
 }
@@ -179,6 +193,50 @@ func (m *Manager) ListWorktrees() ([]string, error) {
 	}
 
 	return worktrees, nil
+}
+
+// PruneStaleWorktrees removes stale worktree references from git
+func (m *Manager) PruneStaleWorktrees() error {
+	args := []string{"worktree", "prune"}
+	_, err := m.runGitCommand(args)
+	if err != nil {
+		return fmt.Errorf("failed to prune stale worktrees: %w", err)
+	}
+	return nil
+}
+
+// CleanupWorktreeConflict handles conflicts when creating worktrees
+func (m *Manager) CleanupWorktreeConflict(worktreePath string) error {
+	// First try to prune stale references
+	if err := m.PruneStaleWorktrees(); err != nil {
+		return fmt.Errorf("failed to prune stale worktrees: %w", err)
+	}
+
+	// Check if the path still exists after pruning
+	if _, err := os.Stat(worktreePath); err == nil {
+		// Path exists, try to remove it properly
+		if err := m.RemoveWorktree(worktreePath); err != nil {
+			return fmt.Errorf("failed to remove existing worktree: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// RemoveWorktreeForSession removes a worktree and handles all cleanup
+func (m *Manager) RemoveWorktreeForSession(worktreePath string) error {
+	// First check if worktree exists and is valid
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		// Worktree doesn't exist, just prune stale references
+		return m.PruneStaleWorktrees()
+	}
+
+	// Try to remove via git command first
+	if err := m.RemoveWorktree(worktreePath); err != nil {
+		return fmt.Errorf("failed to remove worktree %s: %w", worktreePath, err)
+	}
+
+	return nil
 }
 
 func (m *Manager) isValidWorktree(path string) bool {

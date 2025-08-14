@@ -211,15 +211,11 @@ func executeDefaultCleanup(dryRun, force bool) error {
 	for _, session := range staleSessions {
 		fmt.Printf("Cleaning up work item %s...\n", session.NamespacedID)
 
-		// Remove worktree (direct filesystem removal)
-		if _, err := os.Stat(session.WorktreePath); err == nil {
-			if err := removeWorktreeDirectory(session.WorktreePath); err != nil {
-				fmt.Printf("  Warning: failed to remove worktree %s: %v\n", session.WorktreePath, err)
-			} else {
-				fmt.Printf("  Removed worktree: %s\n", session.WorktreePath)
-			}
+		// Remove worktree using unified git manager approach
+		if err := removeWorktreeForCleanup(session.WorktreePath); err != nil {
+			fmt.Printf("  Warning: failed to remove worktree %s: %v\n", session.WorktreePath, err)
 		} else {
-			fmt.Printf("  Worktree already gone: %s\n", session.WorktreePath)
+			fmt.Printf("  Removed worktree: %s\n", session.WorktreePath)
 		}
 
 		// Clean up sandbox
@@ -363,13 +359,51 @@ func executeComprehensiveCleanup(dryRun, force bool) error {
 	return nil
 }
 
-// removeWorktreeDirectory safely removes a worktree directory
-func removeWorktreeDirectory(worktreePath string) error {
+// removeWorktreeForCleanup safely removes a worktree using git commands
+func removeWorktreeForCleanup(worktreePath string) error {
 	// Validate that this looks like a worktree path to avoid accidental deletion
 	if !strings.Contains(worktreePath, "sbs") && !strings.Contains(worktreePath, "worktree") {
 		return fmt.Errorf("path doesn't appear to be a worktree: %s", worktreePath)
 	}
 
-	// Remove the directory
-	return os.RemoveAll(worktreePath)
+	// Check if worktree exists
+	if _, err := os.Stat(worktreePath); os.IsNotExist(err) {
+		// Worktree doesn't exist, just prune stale references
+		return pruneStaleWorktreesForCleanup()
+	}
+
+	// Initialize repository manager to get current repo
+	repoManager := repo.NewManager()
+	currentRepo, err := repoManager.DetectCurrentRepository()
+	if err != nil {
+		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+
+	// Initialize git manager
+	gitManager, err := git.NewManager(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to initialize git manager: %w", err)
+	}
+
+	// Use the enhanced worktree removal method
+	return gitManager.RemoveWorktreeForSession(worktreePath)
+}
+
+// pruneStaleWorktreesForCleanup prunes stale worktrees during cleanup
+func pruneStaleWorktreesForCleanup() error {
+	// Initialize repository manager to get current repo
+	repoManager := repo.NewManager()
+	currentRepo, err := repoManager.DetectCurrentRepository()
+	if err != nil {
+		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+
+	// Initialize git manager
+	gitManager, err := git.NewManager(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to initialize git manager: %w", err)
+	}
+
+	// Prune stale worktrees
+	return gitManager.PruneStaleWorktrees()
 }

@@ -30,6 +30,7 @@ Work item ID formats:
 func init() {
 	rootCmd.AddCommand(stopCmd)
 	stopCmd.Flags().BoolP("delete-branch", "d", false, "Delete the associated branch when stopping the session")
+	stopCmd.Flags().BoolP("remove-worktree", "w", false, "Remove the associated worktree when stopping the session")
 	stopCmd.Flags().BoolP("yes", "y", false, "Skip confirmation prompts")
 }
 
@@ -38,6 +39,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 
 	// Get flags
 	deleteBranch, _ := cmd.Flags().GetBool("delete-branch")
+	removeWorktree, _ := cmd.Flags().GetBool("remove-worktree")
 	skipConfirmation, _ := cmd.Flags().GetBool("yes")
 
 	// Load sessions
@@ -126,6 +128,15 @@ func runStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save sessions: %w", err)
 	}
 
+	// Handle worktree removal if requested
+	if removeWorktree {
+		if err := removeWorktreeForSession(session); err != nil {
+			fmt.Printf("Warning: failed to remove worktree: %v\n", err)
+		} else {
+			fmt.Printf("Removed worktree: %s\n", session.WorktreePath)
+		}
+	}
+
 	// Handle branch deletion if requested
 	if deleteBranch {
 		if err := deleteBranchForSession(session); err != nil {
@@ -135,8 +146,40 @@ func runStop(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Session for work item %s stopped. Worktree preserved at: %s\n",
-		workItemID, session.WorktreePath)
+	if !removeWorktree {
+		fmt.Printf("Session for work item %s stopped. Worktree preserved at: %s\n",
+			workItemID, session.WorktreePath)
+	} else {
+		fmt.Printf("Session for work item %s stopped and worktree removed.\n", workItemID)
+	}
+
+	return nil
+}
+
+// removeWorktreeForSession removes the worktree associated with a session
+func removeWorktreeForSession(session *config.SessionMetadata) error {
+	if session.WorktreePath == "" {
+		return fmt.Errorf("no worktree path associated with session")
+	}
+
+	// Initialize repository manager to get current repo
+	repoManager := repo.NewManager()
+	currentRepo, err := repoManager.DetectCurrentRepository()
+	if err != nil {
+		return fmt.Errorf("must be run from within a git repository: %w", err)
+	}
+
+	// Initialize git manager
+	gitManager, err := git.NewManager(currentRepo.Root)
+	if err != nil {
+		return fmt.Errorf("failed to initialize git manager: %w", err)
+	}
+
+	// Use the enhanced worktree removal method
+	err = gitManager.RemoveWorktreeForSession(session.WorktreePath)
+	if err != nil {
+		return fmt.Errorf("failed to remove worktree %s: %w", session.WorktreePath, err)
+	}
 
 	return nil
 }
