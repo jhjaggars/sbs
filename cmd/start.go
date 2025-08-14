@@ -36,7 +36,7 @@ This command will:
 1. Create/switch to a work item branch (issue-{source}-{id}-{slug})
 2. Create/use a worktree in ~/.sbs-worktrees/
 3. Create/attach to a tmux session (sbs-{source}-{id})
-4. Launch work-issue.sh in the session
+4. Execute .sbs/start script if it exists
 
 Input sources are configured via .sbs/input-source.json in your project root.
 Test work types (test:*) are always available and accept any custom ID regardless of project configuration.`,
@@ -46,7 +46,7 @@ Test work types (test:*) are always available and accept any custom ID regardles
 
 func init() {
 	rootCmd.AddCommand(startCmd)
-	startCmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
+	startCmd.Flags().BoolP("resume", "r", false, "Resume existing session without executing start script")
 	startCmd.Flags().String("command", "", "Custom command to run in tmux session")
 	startCmd.Flags().Bool("no-command", false, "Start session without executing any command")
 	startCmd.Flags().BoolP("verbose", "v", false, "Enable verbose debug output")
@@ -250,7 +250,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		// 1. Command-line flags (--command, --no-command)
 		// 2. Repository config
 		// 3. Global config
-		// 4. Default behavior (work-issue.sh)
+		// 4. Default behavior (.sbs/start script if exists)
 
 		if noCommand {
 			// Explicitly requested no command execution
@@ -284,13 +284,15 @@ func runStart(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Warning: Failed to start sandbox sleep: %v\n", err)
 			}
 		} else {
-			// Default behavior - execute work-issue.sh
-			workIssueScript := resolveWorkIssueScript(currentRepo.Root, repoConfig.WorkIssueScript)
-			fmt.Printf("Starting work-issue.sh in session (using: %s)...\n", workIssueScript)
-			// Use 0 as dummy issue number since work-issue.sh will use environment variables for context
-
-			if err := tmuxManager.StartWorkIssue(session.Name, 0, workIssueScript, tmuxEnv); err != nil {
-				fmt.Printf("Warning: Failed to start work-issue.sh: %v\n", err)
+			// Default behavior - check for .sbs/start script
+			startScript := resolveStartScript(currentRepo.Root)
+			if startScript != "" {
+				fmt.Printf("Executing start script in session: %s\n", startScript)
+				if err := tmuxManager.StartWorkIssue(session.Name, 0, startScript, tmuxEnv); err != nil {
+					fmt.Printf("Warning: Failed to execute start script: %v\n", err)
+				}
+			} else {
+				fmt.Printf("No .sbs/start script found, session started without executing any script.\n")
 			}
 		}
 	}
@@ -474,15 +476,15 @@ func createWorkItemSessionMetadata(workItem *inputsource.WorkItem, branch, workt
 	}
 }
 
-// resolveWorkIssueScript determines which work-issue.sh script to use
-// Priority: .sbs/work-issue.sh -> configured script -> default
-func resolveWorkIssueScript(repoRoot, configuredScript string) string {
-	// First check for .sbs/work-issue.sh in repository root
-	localScript := filepath.Join(repoRoot, ".sbs", "work-issue.sh")
+// resolveStartScript determines if a local .sbs/start script exists
+// Returns the path to .sbs/start if it exists, empty string otherwise
+func resolveStartScript(repoRoot string) string {
+	// Check for .sbs/start in repository root
+	localScript := filepath.Join(repoRoot, ".sbs", "start")
 	if _, err := os.Stat(localScript); err == nil {
 		return localScript
 	}
 
-	// Fall back to configured script
-	return configuredScript
+	// Return empty string if no local start script exists
+	return ""
 }

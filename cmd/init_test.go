@@ -172,11 +172,7 @@ func TestInitCommand_DryRun(t *testing.T) {
 		err := os.Mkdir(gitDir, 0755)
 		require.NoError(t, err)
 
-		// Create source files
-		workIssueScript := filepath.Join(tmpDir, "work-issue.sh")
-		err = os.WriteFile(workIssueScript, []byte("#!/bin/bash\necho 'work-issue'"), 0755)
-		require.NoError(t, err)
-
+		// Create source files (only need hook script now)
 		scriptsDir := filepath.Join(tmpDir, "scripts")
 		err = os.Mkdir(scriptsDir, 0755)
 		require.NoError(t, err)
@@ -223,12 +219,7 @@ func TestInitCommand_Integration(t *testing.T) {
 		err := os.Mkdir(gitDir, 0755)
 		require.NoError(t, err)
 
-		// Create source files
-		workIssueScript := filepath.Join(tmpDir, "work-issue.sh")
-		workIssueContent := "#!/bin/bash\necho 'work-issue script'"
-		err = os.WriteFile(workIssueScript, []byte(workIssueContent), 0755)
-		require.NoError(t, err)
-
+		// Create source files (only need hook script now)
 		scriptsDir := filepath.Join(tmpDir, "scripts")
 		err = os.Mkdir(scriptsDir, 0755)
 		require.NoError(t, err)
@@ -264,27 +255,27 @@ func TestInitCommand_Integration(t *testing.T) {
 		sbsDir := filepath.Join(tmpDir, ".sbs")
 		assert.True(t, fileExists(sbsDir), ".sbs directory should be created")
 
-		copiedWorkIssue := filepath.Join(sbsDir, "work-issue.sh")
-		assert.True(t, fileExists(copiedWorkIssue), "work-issue.sh should be copied")
+		startScript := filepath.Join(sbsDir, "start")
+		assert.True(t, fileExists(startScript), "start script should be created")
 
 		copiedHook := filepath.Join(sbsDir, "claude-code-stop-hook.sh")
 		assert.True(t, fileExists(copiedHook), "claude-code-stop-hook.sh should be copied")
 
-		// Verify content
-		content, err := os.ReadFile(copiedWorkIssue)
+		// Verify start script has template content
+		content, err := os.ReadFile(startScript)
 		require.NoError(t, err)
-		assert.Equal(t, workIssueContent, string(content))
+		assert.Contains(t, string(content), "#!/bin/bash")
+		assert.Contains(t, string(content), "SBS Start Script")
 
+		// Verify hook script content
 		content, err = os.ReadFile(copiedHook)
 		require.NoError(t, err)
 		assert.Equal(t, hookContent, string(content))
 
-		// Verify permissions
-		srcInfo, err := os.Stat(workIssueScript)
+		// Verify start script is executable
+		startInfo, err := os.Stat(startScript)
 		require.NoError(t, err)
-		dstInfo, err := os.Stat(copiedWorkIssue)
-		require.NoError(t, err)
-		assert.Equal(t, srcInfo.Mode(), dstInfo.Mode())
+		assert.True(t, startInfo.Mode()&0111 != 0, "start script should be executable")
 	})
 
 	t.Run("force_overwrite", func(t *testing.T) {
@@ -295,11 +286,6 @@ func TestInitCommand_Integration(t *testing.T) {
 		err := os.Mkdir(gitDir, 0755)
 		require.NoError(t, err)
 
-		workIssueScript := filepath.Join(tmpDir, "work-issue.sh")
-		newContent := "#!/bin/bash\necho 'updated content'"
-		err = os.WriteFile(workIssueScript, []byte(newContent), 0755)
-		require.NoError(t, err)
-
 		scriptsDir := filepath.Join(tmpDir, "scripts")
 		err = os.Mkdir(scriptsDir, 0755)
 		require.NoError(t, err)
@@ -308,13 +294,13 @@ func TestInitCommand_Integration(t *testing.T) {
 		err = os.WriteFile(hookScript, []byte("#!/bin/bash\necho 'hook'"), 0755)
 		require.NoError(t, err)
 
-		// Pre-create .sbs directory with existing files
+		// Pre-create .sbs directory with existing start script
 		sbsDir := filepath.Join(tmpDir, ".sbs")
 		err = os.Mkdir(sbsDir, 0755)
 		require.NoError(t, err)
 
-		existingFile := filepath.Join(sbsDir, "work-issue.sh")
-		err = os.WriteFile(existingFile, []byte("old content"), 0644)
+		existingStartScript := filepath.Join(sbsDir, "start")
+		err = os.WriteFile(existingStartScript, []byte("#!/bin/bash\necho 'old content'"), 0755)
 		require.NoError(t, err)
 
 		// Change to temp directory
@@ -351,10 +337,11 @@ func TestInitCommand_Integration(t *testing.T) {
 		err = cmd2.Execute()
 		require.NoError(t, err)
 
-		// Verify content was updated
-		content, err := os.ReadFile(existingFile)
+		// Verify content was updated to template content
+		content, err := os.ReadFile(existingStartScript)
 		require.NoError(t, err)
-		assert.Equal(t, newContent, string(content))
+		assert.Contains(t, string(content), "SBS Start Script")
+		assert.Contains(t, string(content), "#!/bin/bash")
 	})
 }
 
@@ -384,46 +371,12 @@ func TestInitCommand_ErrorHandling(t *testing.T) {
 		assert.Contains(t, err.Error(), "must be run from within a git repository")
 	})
 
-	t.Run("missing_work_issue_script", func(t *testing.T) {
-		tmpDir := t.TempDir()
-
-		// Create git repository but no work-issue.sh
-		gitDir := filepath.Join(tmpDir, ".git")
-		err := os.Mkdir(gitDir, 0755)
-		require.NoError(t, err)
-
-		originalDir, err := os.Getwd()
-		require.NoError(t, err)
-		defer func() {
-			err := os.Chdir(originalDir)
-			require.NoError(t, err)
-		}()
-
-		err = os.Chdir(tmpDir)
-		require.NoError(t, err)
-
-		cmd := &cobra.Command{
-			Use:  "init",
-			RunE: runInit,
-		}
-		cmd.Flags().Bool("dry-run", false, "Dry run")
-		cmd.Flags().Bool("force", false, "Force")
-
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "work-issue.sh not found")
-	})
-
 	t.Run("missing_hook_script", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Create git repository and work-issue.sh but no scripts directory
+		// Create git repository but no scripts directory
 		gitDir := filepath.Join(tmpDir, ".git")
 		err := os.Mkdir(gitDir, 0755)
-		require.NoError(t, err)
-
-		workIssueScript := filepath.Join(tmpDir, "work-issue.sh")
-		err = os.WriteFile(workIssueScript, []byte("#!/bin/bash"), 0755)
 		require.NoError(t, err)
 
 		originalDir, err := os.Getwd()
@@ -458,10 +411,6 @@ func TestInitCommand_ErrorHandling(t *testing.T) {
 		// Create git repository and source files
 		gitDir := filepath.Join(tmpDir, ".git")
 		err := os.Mkdir(gitDir, 0755)
-		require.NoError(t, err)
-
-		workIssueScript := filepath.Join(tmpDir, "work-issue.sh")
-		err = os.WriteFile(workIssueScript, []byte("#!/bin/bash"), 0755)
 		require.NoError(t, err)
 
 		scriptsDir := filepath.Join(tmpDir, "scripts")
@@ -501,7 +450,8 @@ func TestInitCommand_ErrorHandling(t *testing.T) {
 		err = cmd.Execute()
 		assert.Error(t, err)
 		// Should fail when trying to write to read-only directory
-		assert.True(t, strings.Contains(err.Error(), "failed to copy") ||
+		assert.True(t, strings.Contains(err.Error(), "failed to create start script") ||
+			strings.Contains(err.Error(), "failed to copy") ||
 			strings.Contains(err.Error(), "permission denied"))
 	})
 }

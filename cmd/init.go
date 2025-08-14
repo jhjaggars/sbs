@@ -13,14 +13,14 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize repository for SBS usage",
 	Long: `Initialize the current repository for use with SBS by creating a .sbs directory
-and populating it with the necessary scripts (work-issue.sh and loghook script).
+and populating it with the necessary scripts.
 
 This command creates:
-- .sbs/work-issue.sh (copied from repository root or template)
+- .sbs/start (template start script for this repository)
 - .sbs/claude-code-stop-hook.sh (copied from scripts/ directory)
 
-After running this command, 'sbs start' will use the local .sbs/work-issue.sh
-script by default instead of the global configuration.`,
+After running this command, 'sbs start' will use the local .sbs/start
+script if it exists, otherwise will start the session without any script.`,
 	RunE: runInit,
 }
 
@@ -46,7 +46,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	sbsDir := filepath.Join(cwd, ".sbs")
-	workIssueScript := filepath.Join(sbsDir, "work-issue.sh")
+	startScript := filepath.Join(sbsDir, "start")
 	hookScript := filepath.Join(sbsDir, "claude-code-stop-hook.sh")
 
 	fmt.Printf("Initializing SBS in repository: %s\n", cwd)
@@ -71,19 +71,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Created directory: %s\n", sbsDir)
 	}
 
-	// Copy work-issue.sh
-	srcWorkIssue := filepath.Join(cwd, "work-issue.sh")
-	if !fileExists(srcWorkIssue) {
-		return fmt.Errorf("work-issue.sh not found at expected path: %s", srcWorkIssue)
-	}
-
+	// Create template start script
 	if dryRun {
-		fmt.Printf("- Copy %s -> %s\n", srcWorkIssue, workIssueScript)
+		fmt.Printf("- Create template start script: %s\n", startScript)
 	} else {
-		if err := copyFileWithForceCheck(srcWorkIssue, workIssueScript, force); err != nil {
-			return fmt.Errorf("failed to copy work-issue.sh: %w", err)
+		if err := createStartScriptWithForceCheck(startScript, force); err != nil {
+			return fmt.Errorf("failed to create start script: %w", err)
 		}
-		fmt.Printf("Copied: %s -> %s\n", srcWorkIssue, workIssueScript)
+		fmt.Printf("Created template start script: %s\n", startScript)
 	}
 
 	// Copy claude-code-stop-hook.sh
@@ -107,8 +102,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nSBS initialization completed successfully!")
-	fmt.Println("- 'sbs start' will now use .sbs/work-issue.sh by default")
-	fmt.Println("- You can customize .sbs/work-issue.sh for this repository's specific needs")
+	fmt.Println("- 'sbs start' will use .sbs/start script if it exists")
+	fmt.Println("- You can customize .sbs/start for this repository's specific needs")
 	fmt.Println("- Consider adding .sbs/ to version control to share team configuration")
 
 	return nil
@@ -162,4 +157,44 @@ func copyFile(src, dst string) error {
 	}
 
 	return os.Chmod(dst, srcInfo.Mode())
+}
+
+// createStartScriptWithForceCheck creates a template start script with force check
+func createStartScriptWithForceCheck(dst string, force bool) error {
+	// Check if destination exists and force flag
+	if fileExists(dst) && !force {
+		return fmt.Errorf("file already exists: %s (use --force to overwrite)", dst)
+	}
+
+	return createStartScript(dst)
+}
+
+// createStartScript creates a template start script
+func createStartScript(dst string) error {
+	templateContent := `#!/bin/bash
+# SBS Start Script
+# This script runs when starting a new SBS session for this repository.
+# Customize this script to set up your development environment.
+
+set -e
+
+echo "Starting SBS session..."
+
+# Example: Install dependencies
+# npm install
+
+# Example: Start development servers
+# npm run dev &
+
+# Example: Open editor
+# code .
+
+echo "SBS session setup complete!"
+`
+
+	if err := os.WriteFile(dst, []byte(templateContent), 0755); err != nil {
+		return err
+	}
+
+	return nil
 }

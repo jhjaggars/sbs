@@ -67,7 +67,7 @@ func TestStartCommand_ArgumentParsing(t *testing.T) {
 				return nil
 			},
 		}
-		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
+		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without executing start script")
 
 		// Act & Assert
 		cmd.SetArgs([]string{"--resume", "123"})
@@ -130,7 +130,7 @@ func TestStartCommand_Structure(t *testing.T) {
 	t.Run("command_accepts_resume_flag", func(t *testing.T) {
 		// Test that the resume flag is properly configured
 		cmd := &cobra.Command{}
-		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without launching work-issue.sh")
+		cmd.Flags().BoolP("resume", "r", false, "Resume existing session without executing start script")
 
 		// Test flag exists
 		flag := cmd.Flags().Lookup("resume")
@@ -280,71 +280,66 @@ func TestStartCommand_InputSourceConfig(t *testing.T) {
 	})
 }
 
-func TestResolveWorkIssueScript(t *testing.T) {
+func TestResolveStartScript(t *testing.T) {
 	t.Run("uses_local_script_when_exists", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Create .sbs directory with work-issue.sh
+		// Create .sbs directory with start script
 		sbsDir := filepath.Join(tmpDir, ".sbs")
 		err := os.Mkdir(sbsDir, 0755)
 		require.NoError(t, err)
 
-		localScript := filepath.Join(sbsDir, "work-issue.sh")
+		localScript := filepath.Join(sbsDir, "start")
 		err = os.WriteFile(localScript, []byte("#!/bin/bash\necho 'local'"), 0755)
 		require.NoError(t, err)
 
-		configuredScript := "/global/work-issue.sh"
-		result := resolveWorkIssueScript(tmpDir, configuredScript)
+		result := resolveStartScript(tmpDir)
 
-		assert.Equal(t, localScript, result, "Should use local .sbs/work-issue.sh when it exists")
+		assert.Equal(t, localScript, result, "Should use local .sbs/start when it exists")
 	})
 
-	t.Run("falls_back_to_configured_script", func(t *testing.T) {
+	t.Run("returns_empty_when_script_missing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		// Don't create .sbs/work-issue.sh
-		configuredScript := "/global/work-issue.sh"
-		result := resolveWorkIssueScript(tmpDir, configuredScript)
+		// Don't create .sbs/start
+		result := resolveStartScript(tmpDir)
 
-		assert.Equal(t, configuredScript, result, "Should fall back to configured script when local doesn't exist")
+		assert.Equal(t, "", result, "Should return empty string when local start script doesn't exist")
 	})
 
-	t.Run("falls_back_when_sbs_dir_missing", func(t *testing.T) {
+	t.Run("returns_empty_when_sbs_dir_missing", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		// Don't create .sbs directory at all
-		configuredScript := "/global/work-issue.sh"
-		result := resolveWorkIssueScript(tmpDir, configuredScript)
+		result := resolveStartScript(tmpDir)
 
-		assert.Equal(t, configuredScript, result, "Should fall back to configured script when .sbs directory doesn't exist")
+		assert.Equal(t, "", result, "Should return empty string when .sbs directory doesn't exist")
 	})
 
-	t.Run("priority_order_integration", func(t *testing.T) {
+	t.Run("detects_script_correctly", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
-		configuredScript := "/configured/work-issue.sh"
+		// Test 1: No local script - should return empty
+		result1 := resolveStartScript(tmpDir)
+		assert.Equal(t, "", result1)
 
-		// Test 1: No local script - should use configured
-		result1 := resolveWorkIssueScript(tmpDir, configuredScript)
-		assert.Equal(t, configuredScript, result1)
-
-		// Test 2: Create local script - should now use local
+		// Test 2: Create local script - should now find it
 		sbsDir := filepath.Join(tmpDir, ".sbs")
 		err := os.Mkdir(sbsDir, 0755)
 		require.NoError(t, err)
 
-		localScript := filepath.Join(sbsDir, "work-issue.sh")
+		localScript := filepath.Join(sbsDir, "start")
 		err = os.WriteFile(localScript, []byte("#!/bin/bash"), 0755)
 		require.NoError(t, err)
 
-		result2 := resolveWorkIssueScript(tmpDir, configuredScript)
+		result2 := resolveStartScript(tmpDir)
 		assert.Equal(t, localScript, result2)
 
-		// Test 3: Remove local script - should fall back to configured again
+		// Test 3: Remove local script - should return empty again
 		err = os.Remove(localScript)
 		require.NoError(t, err)
 
-		result3 := resolveWorkIssueScript(tmpDir, configuredScript)
-		assert.Equal(t, configuredScript, result3)
+		result3 := resolveStartScript(tmpDir)
+		assert.Equal(t, "", result3)
 	})
 }
