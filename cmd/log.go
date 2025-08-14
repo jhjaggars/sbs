@@ -13,13 +13,15 @@ import (
 var logCmd = &cobra.Command{
 	Use:   "log <work-item-id>",
 	Short: "Execute loghook script for a work session",
-	Long: `Execute the .sbs/loghook script for the specified work item once and display the output.
+	Long: `Display output for the specified work item session.
 
 Work item ID formats:
   sbs log 123         # Primary work type
   sbs log test:my-test  # Test work type
 
-The loghook script is executed from the session's worktree directory with a 10-second timeout.`,
+If a .sbs/loghook script exists, it is executed from the session's worktree directory 
+with a 10-second timeout. If no loghook script is found, the command falls back to 
+capturing the current content of the tmux session's first pane.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runLog,
 }

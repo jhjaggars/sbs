@@ -494,6 +494,27 @@ func (m *Manager) runTmuxCommandWithEnv(args []string, env ...map[string]string)
 	return nil
 }
 
+// CapturePane captures the content of the first pane in the specified tmux session
+func (m *Manager) CapturePane(sessionName string) (string, error) {
+	// Check if session exists first
+	exists, err := m.SessionExists(sessionName)
+	if err != nil {
+		return "", fmt.Errorf("failed to check if session exists: %w", err)
+	}
+	if !exists {
+		return "", fmt.Errorf("tmux session '%s' does not exist", sessionName)
+	}
+
+	// Capture the content of the first pane
+	args := []string{"capture-pane", "-t", sessionName, "-p"}
+	output, err := m.runTmuxCommand(args)
+	if err != nil {
+		return "", fmt.Errorf("failed to capture pane content from session '%s': %w", sessionName, err)
+	}
+
+	return string(output), nil
+}
+
 // getExitCode extracts exit code from command error
 func getExitCode(cmd *exec.Cmd) int {
 	if cmd.ProcessState == nil {

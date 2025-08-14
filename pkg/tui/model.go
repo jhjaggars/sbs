@@ -1162,9 +1162,27 @@ func executeLoghookScriptWithOptions(session config.SessionMetadata, timeoutSecs
 
 	// Check if loghook script exists
 	if _, err := os.Stat(loghookPath); os.IsNotExist(err) {
-		execInfo.Error = "script not found"
+		// Only attempt tmux fallback if we have a valid tmux session
+		if session.TmuxSession == "" {
+			execInfo.Error = "script not found and no tmux session available"
+			logScriptExecution(execInfo)
+			return "", fmt.Errorf("loghook script not found at %s and no tmux session available", loghookPath)
+		}
+
+		// Fallback to tmux capture-pane when no loghook script exists
+		execInfo.Error = "script not found, using tmux capture-pane fallback"
 		logScriptExecution(execInfo)
-		return "No loghook script found at " + loghookPath, fmt.Errorf("loghook script not found at %s", loghookPath)
+
+		// Try to capture tmux pane content as fallback
+		tmuxManager := tmux.NewManager()
+		paneContent, captureErr := tmuxManager.CapturePane(session.TmuxSession)
+		if captureErr != nil {
+			return "", fmt.Errorf("loghook script not found at %s and failed to capture tmux pane: %w", loghookPath, captureErr)
+		}
+
+		// Prepend a header to indicate this is tmux capture output
+		output := fmt.Sprintf("--- Tmux pane content (no loghook script found) ---\n%s", paneContent)
+		return output, nil
 	}
 
 	// Perform security validation
