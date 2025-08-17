@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"sbs/pkg/cleanup"
 	"sbs/pkg/config"
 	"sbs/pkg/repo"
 	"sbs/pkg/sandbox"
@@ -80,12 +81,13 @@ var keys = keyMap{
 	),
 }
 
+// ViewMode type for TUI
 type ViewMode int
 
 const (
 	ViewModeRepository ViewMode = iota // Show only current repo sessions
 	ViewModeGlobal                     // Show all sessions across repos
-	ViewModeLog                        // Show log view for selected session
+	ViewModeLog                        // Show log view for selected session (TUI-specific)
 )
 
 // LogView represents the state of the log display
@@ -110,6 +112,7 @@ type Model struct {
 	repoManager            *repo.Manager
 	sandboxManager         *sandbox.Manager
 	statusDetector         *status.Detector
+	cleanupManager         *cleanup.CleanupManager
 	config                 *config.Config
 	width                  int
 	height                 int
@@ -143,6 +146,7 @@ func NewModel() Model {
 
 	tmuxManager := tmux.NewManager()
 	sandboxManager := sandbox.NewManager()
+	cleanupManager := cleanup.NewCleanupManager(tmuxManager, sandboxManager, nil, nil)
 	return Model{
 		sessions:               []config.SessionMetadata{},
 		cursor:                 0,
@@ -153,6 +157,7 @@ func NewModel() Model {
 		repoManager:            repoManager,
 		sandboxManager:         sandboxManager,
 		statusDetector:         status.NewDetector(tmuxManager, sandboxManager),
+		cleanupManager:         cleanupManager,
 		config:                 cfg,
 		showConfirmationDialog: false,
 		confirmationMessage:    "",
@@ -743,8 +748,14 @@ func (m Model) stopSelectedSession() tea.Cmd {
 }
 
 func (m Model) showCleanConfirmation() Model {
-	staleSessions := m.identifyStaleSessionsInCurrentView()
-	if len(staleSessions) == 0 {
+	// Convert TUI ViewMode to cleanup ViewMode
+	viewMode := cleanup.ViewModeGlobal
+	if m.viewMode == ViewModeRepository {
+		viewMode = cleanup.ViewModeRepository
+	}
+
+	staleSessions, err := m.cleanupManager.IdentifyStaleSessionsInView(m.sessions, viewMode)
+	if err != nil || len(staleSessions) == 0 {
 		return m
 	}
 
@@ -774,177 +785,26 @@ func (m Model) showCleanConfirmation() Model {
 func (m Model) executeCleanup() tea.Cmd {
 	sessions := m.pendingCleanSessions
 	return func() tea.Msg {
-		// Initialize cleanedSessions to empty slice instead of nil
-		cleanedSessions := []config.SessionMetadata{}
-		var hasErrors bool
-
-		for _, session := range sessions {
-			// Clean up sandbox
-			sandboxName := session.SandboxName
-			if sandboxName == "" {
-				if session.SandboxName != "" {
-					sandboxName = session.SandboxName
-				} else {
-					// Return cleanSessionsMsg with error instead of error directly
-					return cleanSessionsMsg{
-						err:             fmt.Errorf("session missing sandbox name"),
-						cleanedSessions: cleanedSessions,
-					}
-				}
-			}
-
-			sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
-			if err == nil && sandboxExists {
-				if err := m.sandboxManager.DeleteSandbox(sandboxName); err != nil {
-					hasErrors = true
-					continue
-				}
-			}
-
-			cleanedSessions = append(cleanedSessions, session)
+		// Convert TUI ViewMode to cleanup ViewMode
+		viewMode := cleanup.ViewModeGlobal
+		if m.viewMode == ViewModeRepository {
+			viewMode = cleanup.ViewModeRepository
 		}
 
-		// Load all sessions and filter out cleaned ones
-		allSessions, loadErr := config.LoadAllRepositorySessions()
-		if loadErr != nil {
-			return cleanSessionsMsg{
-				err:             fmt.Errorf("failed to load sessions: %w", loadErr),
-				cleanedSessions: cleanedSessions,
-			}
-		}
+		options := m.cleanupManager.BuildTUICleanupOptions(viewMode, true)
+		results, err := m.cleanupManager.CleanupSessions(sessions, options)
 
-		// Remove cleaned sessions from the list
-		var remainingSessions []config.SessionMetadata
-		for _, session := range allSessions {
-			shouldKeep := true
-			for _, cleanedSession := range cleanedSessions {
-				if session.NamespacedID == cleanedSession.NamespacedID &&
-					session.RepositoryRoot == cleanedSession.RepositoryRoot {
-					shouldKeep = false
-					break
-				}
-			}
-			if shouldKeep {
-				remainingSessions = append(remainingSessions, session)
-			}
-		}
-
-		// Save the updated sessions list
-		if saveErr := config.SaveSessions(remainingSessions); saveErr != nil {
-			return cleanSessionsMsg{
-				err:             fmt.Errorf("failed to save updated sessions: %w", saveErr),
-				cleanedSessions: cleanedSessions,
-			}
-		}
-
-		var finalErr error
-		if hasErrors {
-			finalErr = fmt.Errorf("failed to clean some sessions")
+		var cleanupError error
+		if err != nil {
+			cleanupError = err
+		} else if len(results.Errors) > 0 {
+			cleanupError = fmt.Errorf("failed to clean some sessions")
 		}
 
 		return cleanSessionsMsg{
-			err:             finalErr,
-			cleanedSessions: cleanedSessions,
+			err:             cleanupError,
+			cleanedSessions: sessions[:results.CleanedSessions], // Return the sessions that were cleaned
 		}
-	}
-}
-
-func (m Model) identifyStaleSessionsInCurrentView() []config.SessionMetadata {
-	var staleSessions []config.SessionMetadata
-
-	for _, session := range m.sessions {
-		exists, err := m.tmuxManager.SessionExists(session.TmuxSession)
-		if err != nil {
-			continue
-		}
-		if !exists {
-			staleSessions = append(staleSessions, session)
-		}
-	}
-
-	return staleSessions
-}
-
-func (m Model) identifyAndCleanStaleSessions() struct {
-	cleanedSessions []config.SessionMetadata
-	err             error
-} {
-	staleSessions := m.identifyStaleSessionsInCurrentView()
-
-	// Initialize cleanedSessions to empty slice instead of nil
-	cleanedSessions := []config.SessionMetadata{}
-	var hasErrors bool
-
-	for _, session := range staleSessions {
-		// Clean up sandbox
-		sandboxName := session.SandboxName
-		if sandboxName == "" {
-			// Skip sessions without sandbox names
-			hasErrors = true
-			continue
-		}
-
-		sandboxExists, err := m.sandboxManager.SandboxExists(sandboxName)
-		if err == nil && sandboxExists {
-			if err := m.sandboxManager.DeleteSandbox(sandboxName); err != nil {
-				hasErrors = true
-				continue
-			}
-		}
-
-		cleanedSessions = append(cleanedSessions, session)
-	}
-
-	// Load all sessions and filter out cleaned ones
-	allSessions, loadErr := config.LoadAllRepositorySessions()
-	if loadErr != nil {
-		return struct {
-			cleanedSessions []config.SessionMetadata
-			err             error
-		}{
-			cleanedSessions: cleanedSessions,
-			err:             fmt.Errorf("failed to load sessions: %w", loadErr),
-		}
-	}
-
-	// Remove cleaned sessions from the list
-	var remainingSessions []config.SessionMetadata
-	for _, session := range allSessions {
-		shouldKeep := true
-		for _, cleanedSession := range cleanedSessions {
-			if session.NamespacedID == cleanedSession.NamespacedID &&
-				session.RepositoryRoot == cleanedSession.RepositoryRoot {
-				shouldKeep = false
-				break
-			}
-		}
-		if shouldKeep {
-			remainingSessions = append(remainingSessions, session)
-		}
-	}
-
-	// Save the updated sessions list
-	if saveErr := config.SaveSessions(remainingSessions); saveErr != nil {
-		return struct {
-			cleanedSessions []config.SessionMetadata
-			err             error
-		}{
-			cleanedSessions: cleanedSessions,
-			err:             fmt.Errorf("failed to save updated sessions: %w", saveErr),
-		}
-	}
-
-	var finalErr error
-	if hasErrors {
-		finalErr = fmt.Errorf("failed to clean some sessions")
-	}
-
-	return struct {
-		cleanedSessions []config.SessionMetadata
-		err             error
-	}{
-		cleanedSessions: cleanedSessions,
-		err:             finalErr,
 	}
 }
 
