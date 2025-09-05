@@ -100,14 +100,16 @@ func executeCleanup(mode CleanupMode, dryRun, force bool) error {
 	case CleanupModeDefault:
 		return executeDefaultCleanup(dryRun, force)
 	case CleanupModeStale:
-		return executeStaleCleanup(dryRun, force)
+		fmt.Println("Cleaning up stale sessions only...")
+		return executeDefaultCleanup(dryRun, force)
 	case CleanupModeBranches:
 		return executeBranchCleanup(dryRun, force)
 	case CleanupModeAll:
 		return executeComprehensiveCleanup(dryRun, force)
 	case CleanupModeStaleAndBranches:
 		// Execute both stale and branch cleanup
-		if err := executeStaleCleanup(dryRun, force); err != nil {
+		fmt.Println("Cleaning up stale sessions...")
+		if err := executeDefaultCleanup(dryRun, force); err != nil {
 			return err
 		}
 		return executeBranchCleanup(dryRun, force)
@@ -212,12 +214,6 @@ func executeDefaultCleanup(dryRun, force bool) error {
 	return nil
 }
 
-// executeStaleCleanup performs cleanup of stale sessions only
-func executeStaleCleanup(dryRun, force bool) error {
-	fmt.Println("Cleaning up stale sessions only...")
-	return executeDefaultCleanup(dryRun, force)
-}
-
 // executeBranchCleanup performs cleanup of orphaned branches
 func executeBranchCleanup(dryRun, force bool) error {
 	fmt.Println("Cleaning up orphaned branches...")
@@ -313,7 +309,8 @@ func executeComprehensiveCleanup(dryRun, force bool) error {
 	fmt.Println("Performing comprehensive cleanup of all resources...")
 
 	// Execute stale session cleanup
-	if err := executeStaleCleanup(dryRun, force); err != nil {
+	fmt.Println("Cleaning up stale sessions...")
+	if err := executeDefaultCleanup(dryRun, force); err != nil {
 		fmt.Printf("Warning: stale session cleanup failed: %v\n", err)
 	}
 
